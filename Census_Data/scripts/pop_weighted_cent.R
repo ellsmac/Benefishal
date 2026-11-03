@@ -1,7 +1,16 @@
 
 #loading libraries
-#install.packages("USpopcenters") #install for first time 
-library(USpopcenters); library(dplyr); library(sf); library(mapview)
+# Packages (first time only)
+# install.packages(c("USpopcenters", "tigris", "sf", "dplyr", "mapview", "osrm"))
+
+library(USpopcenters)
+library(tigris)
+library(sf)
+library(dplyr)
+library(mapview)
+library(osrm)
+
+options(tigris_use_cache = TRUE)
 
 #load in pop data
 study_bg <- block_group2020 |>
@@ -31,10 +40,6 @@ study_bg <- block_group2020 |>
 
 
 #read in blocks from diff areas
-install.packages(c("tigris", "sf", "dplyr"))
-library(tigris); library(sf); library(dplyr)
-options(tigris_use_cache = TRUE)
-
 blocks <- bind_rows(
   blocks(state = "CA", county = "San Diego", year = 2020),  #based on 2020 data
   blocks(state = "CA", county = "Riverside", year = 2020)
@@ -63,6 +68,8 @@ study_blk |> st_drop_geometry() |> group_by(zone) |> summarise(pop = sum(POP20))
 #used a 20 km buffer 
 bridge <- st_sfc(st_point(c(-117.240839, 33.414445)), crs = 4326) |> #coordinates of the bridge
   st_transform(3310)
+
+bridge_pt <- st_transform(bridge, 4326) |> st_sf()
 
 study_blk <- study_blk |>
   st_transform(3310) |>
@@ -98,7 +105,6 @@ pw_centroids <- study_blk |>
 nrow(pw_centroids)
 
 #filter to centroids that would use the bridge
-# Retry wrapper for the flaky demo server
 osrm_retry <- function(src, dst, tries = 3) {
   for (k in seq_len(tries)) {
     res <- tryCatch(osrmTable(src = src, dst = dst)$durations, error = function(e) e)
@@ -154,7 +160,7 @@ nrow(bridge_users)
 sum(bridge_users$pop)
 
 mapview(pw_centroids, zcol = "uses_bridge") + mapview(bridge_pt, col.regions = "red")
-###################
+#####################
 
 #how many people does this cover? 
 pw_centroids |> st_drop_geometry() |> group_by(uses_bridge) |> summarise(pop = sum(pop), hh = sum(hh))
