@@ -173,7 +173,7 @@ extra_min <- cbind(
 pw_centroids$min_extra <- apply(extra_min, 1, min, na.rm = TRUE)
 
   #~5,700
-
+##edit for testing
 #How many people are within X extra minutes of a bridge route?
 pw_centroids |>
   st_drop_geometry() |>
