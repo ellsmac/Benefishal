@@ -29,63 +29,112 @@ dataavailable <- read_waterdata_ts_meta(
 raw_1990 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                      parameter_code = parameterCd,
                                      time = c("1990-01-16", "1990-12-31"))
+#saving 1990 raw data
+write.csv(raw_1990, here("Flood_data/raw_data",
+                            "raw_1990_gauge_11044300.csv"))
 
 raw_1991 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                    parameter_code = parameterCd,
                                    time = c("1991-01-01", "1991-12-31"))
+#saving raw 1991 data
+write.csv(raw_1991, here("Flood_data/raw_data",
+                         "raw_1991_gauge_11044300.csv"))
 
-raw_1992 <- raw_1991 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
+raw_1992 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                                   parameter_code = parameterCd,
                                                   time = c("1992-01-01", "1992-12-31"))
+#saving raw 1992 data
+write.csv(raw_1992, here("Flood_data/raw_data",
+                         "raw_1992_gauge_11044300.csv"))
 
 raw_1993_1994 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                       parameter_code = parameterCd,
                                       time = c("1993-01-01", "1994-12-31"))
 
+#saving raw 1993-4 data
+write.csv(raw_1993_1994, here("Flood_data/raw_data",
+                         "raw_1993_94_gauge_11044300.csv"))
+
 raw_1995_1997 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                            parameter_code = parameterCd,
                                            time = c("1995-01-01", "1997-12-31"))
+
+#saving raw 1995-97 data
+write.csv(raw_1995_1997, here("Flood_data/raw_data",
+                              "raw_1995_97_gauge_11044300.csv"))
 
 raw_1998_2000 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                            parameter_code = parameterCd,
                                            time = c("1998-01-01", "2000-12-31"))
     #three years is as big as I can seem to pull at once, and it still takes some time
 
+#saving raw 1998-2000 data
+write.csv(raw_1998_2000, here("Flood_data/raw_data",
+                              "raw_1998_2000_gauge_11044300.csv"))
+
 raw_2001_2003 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                            parameter_code = parameterCd,
                                            time = c("2001-01-01", "2003-12-31"))
+#saving raw 2001-2003 data
+write.csv(raw_2001_2003, here("Flood_data/raw_data",
+                              "raw_2001_2003_gauge_11044300.csv"))
 
 raw_2004_2006 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                            parameter_code = parameterCd,
                                            time = c("2004-01-01", "2006-12-31"))
 
+#saving raw 2004-2006 data
+write.csv(raw_2004_2006, here("Flood_data/raw_data",
+                              "raw_2004_2006_gauge_11044300.csv"))
+
 raw_2007_2009 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                            parameter_code = parameterCd,
                                            time = c("2007-01-01", "2009-12-31"))
+#saving raw 2007-2009 data
+write.csv(raw_2007_2009, here("Flood_data/raw_data",
+                              "raw_2007_2009_gauge_11044300.csv"))
 
 raw_2010_2012 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                            parameter_code = parameterCd,
                                            time = c("2010-01-01", "2012-12-31"))
+#saving raw 2010-2012 data
+write.csv(raw_2010_2012, here("Flood_data/raw_data",
+                              "raw_2010_2012_gauge_11044300.csv"))
 
 raw_2013_2015 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                            parameter_code = parameterCd,
                                            time = c("2013-01-01", "2015-12-31"))
+#saving raw 2013-2015 data
+write.csv(raw_2013_2015, here("Flood_data/raw_data",
+                              "raw_2013_2015_gauge_11044300.csv"))
 
 raw_2016_2018 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                            parameter_code = parameterCd,
                                            time = c("2016-01-01", "2018-12-31"))
+#saving raw 2016-2018 data
+write.csv(raw_2016_2018, here("Flood_data/raw_data",
+                              "raw_2016_2018_gauge_11044300.csv"))
 
 raw_2019_2021 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                            parameter_code = parameterCd,
                                            time = c("2019-01-01", "2021-12-31"))
+#saving raw 2019-2021 data
+write.csv(raw_2019_2021, here("Flood_data/raw_data",
+                              "raw_2019_2021_gauge_11044300.csv"))
 
 raw_2022_2024 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                            parameter_code = parameterCd,
                                            time = c("2022-01-01", "2024-12-31"))
+#saving raw 2022-2024 data
+write.csv(raw_2022_2024, here("Flood_data/raw_data",
+                              "raw_2022_2024_gauge_11044300.csv"))
 
 raw_2025 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                            parameter_code = parameterCd,
                                            time = c("2025-01-01", "2025-12-31"))
+#saving raw 2025 data
+write.csv(raw_2025, here("Flood_data/raw_data",
+                              "raw_2025_gauge_11044300.csv"))
 
 ###########
 
@@ -125,7 +174,7 @@ discharge_1992 <- raw_1992 |>
          cfs_value = value,
          date_time_utc = time)
 
-#looking for possible floods, have to do in 
+#looking for possible floods
 pf_1992 <- discharge_1992 |>
   filter(cfs_value >= 2300)
   #68 rows returned where cfs is greater than or equal to 2300
@@ -177,6 +226,9 @@ gaps_1990 <- raw_1990 |>
          gap_total_days = gap_total_hours / 24) |>
   relocate(gap_total_days, .after = gap_total_hours)
 
+write.csv(gaps_1990, here("Flood_data/clean_data",
+                            "gauge_gaps_1990.csv"))
+
 #gaps 1991
 gaps_1991 <- raw_1991 |>
   arrange(time) |>
@@ -190,6 +242,9 @@ gaps_1991 <- raw_1991 |>
   mutate(missing_readings = gap_total_hours * 4 - 1,
          gap_total_days = gap_total_hours / 24) |>
   relocate(gap_total_days, .after = gap_total_hours)
+
+write.csv(gaps_1991, here("Flood_data/clean_data",
+                          "gauge_gaps_1991.csv"))
 
 #gaps 1992
 gaps_1992 <- raw_1992 |>
@@ -205,6 +260,9 @@ gaps_1992 <- raw_1992 |>
          gap_total_days = gap_total_hours / 24) |>
   relocate(gap_total_days, .after = gap_total_hours)
 
+write.csv(gaps_1992, here("Flood_data/clean_data",
+                          "gauge_gaps_1992.csv"))
+
 #gaps 1993-94
 gaps_1993_94 <- raw_1993_1994 |>
   arrange(time) |>
@@ -218,6 +276,9 @@ gaps_1993_94 <- raw_1993_1994 |>
   mutate(missing_readings = gap_total_hours * 4 - 1,
          gap_total_days = gap_total_hours / 24) |>
   relocate(gap_total_days, .after = gap_total_hours)
+
+write.csv(gaps_1993_94, here("Flood_data/clean_data",
+                          "gauge_gaps_1993_1994.csv"))
 
 #gaps 1995-97
 gaps_1995_97 <- raw_1995_1997 |>
@@ -233,6 +294,9 @@ gaps_1995_97 <- raw_1995_1997 |>
          gap_total_days = gap_total_hours / 24) |>
   relocate(gap_total_days, .after = gap_total_hours)
 
+write.csv(gaps_1995_97, here("Flood_data/clean_data",
+                             "gauge_gaps_1995_1997.csv"))
+
 #gaps 1998-2000
 gaps_1998_2000 <- raw_1998_2000 |>
   arrange(time) |>
@@ -246,6 +310,9 @@ gaps_1998_2000 <- raw_1998_2000 |>
   mutate(missing_readings = gap_total_hours * 4 - 1,
          gap_total_days = gap_total_hours / 24) |>
   relocate(gap_total_days, .after = gap_total_hours)
+
+write.csv(gaps_1998_2000, here("Flood_data/clean_data",
+                             "gauge_gaps_1998_2000.csv"))
 
 #gaps 2001-03
 gaps_2001_03 <- raw_2001_2003 |>
@@ -261,6 +328,9 @@ gaps_2001_03 <- raw_2001_2003 |>
          gap_total_days = gap_total_hours / 24) |>
   relocate(gap_total_days, .after = gap_total_hours)
 
+write.csv(gaps_2001_03, here("Flood_data/clean_data",
+                             "gauge_gaps_2001_2003.csv"))
+
 #gaps 2004-2006
 gaps_2004_06 <- raw_2004_2006 |>
   arrange(time) |>
@@ -274,6 +344,9 @@ gaps_2004_06 <- raw_2004_2006 |>
   mutate(missing_readings = gap_total_hours * 4 - 1,
          gap_total_days = gap_total_hours / 24) |>
   relocate(gap_total_days, .after = gap_total_hours)
+
+write.csv(gaps_2004_06, here("Flood_data/clean_data",
+                             "gauge_gaps_2004_2006.csv"))
 
 #gaps 2007-2009
 gaps_2007_09 <- raw_2007_2009 |>
@@ -289,6 +362,9 @@ gaps_2007_09 <- raw_2007_2009 |>
          gap_total_days = gap_total_hours / 24) |>
   relocate(gap_total_days, .after = gap_total_hours)
 
+write.csv(gaps_2007_09, here("Flood_data/clean_data",
+                             "gauge_gaps_2007_2009.csv"))
+
 #gaps 2010-2012
 gaps_2010_12 <- raw_2010_2012 |>
   arrange(time) |>
@@ -302,6 +378,9 @@ gaps_2010_12 <- raw_2010_2012 |>
   mutate(missing_readings = gap_total_hours * 4 - 1,
          gap_total_days = gap_total_hours / 24) |>
   relocate(gap_total_days, .after = gap_total_hours)
+
+write.csv(gaps_2010_12, here("Flood_data/clean_data",
+                             "gauge_gaps_2010_2012.csv"))
 
 #gaps 2013-2015
 gaps_2013_15 <- raw_2013_2015 |>
@@ -317,6 +396,9 @@ gaps_2013_15 <- raw_2013_2015 |>
          gap_total_days = gap_total_hours / 24) |>
   relocate(gap_total_days, .after = gap_total_hours)
 
+write.csv(gaps_2013_15, here("Flood_data/clean_data",
+                             "gauge_gaps_2013_2015.csv"))
+
 #gaps 2016-2018
 gaps_2016_18 <- raw_2016_2018 |>
   arrange(time) |>
@@ -331,6 +413,9 @@ gaps_2016_18 <- raw_2016_2018 |>
          gap_total_days = gap_total_hours / 24) |>
   relocate(gap_total_days, .after = gap_total_hours)
 
+write.csv(gaps_2016_18, here("Flood_data/clean_data",
+                             "gauge_gaps_2016_2018.csv"))
+
 #gaps 2019-2021
 gaps_2019_21 <- raw_2019_2021 |>
   arrange(time) |>
@@ -344,6 +429,9 @@ gaps_2019_21 <- raw_2019_2021 |>
   mutate(missing_readings = gap_total_hours * 4 - 1,
          gap_total_days = gap_total_hours / 24) |>
   relocate(gap_total_days, .after = gap_total_hours)
+
+write.csv(gaps_2019_21, here("Flood_data/clean_data",
+                             "gauge_gaps_2019_2021.csv"))
 
 #gaps 2022-2024
 gaps_2022_24 <- raw_2022_2024 |>
