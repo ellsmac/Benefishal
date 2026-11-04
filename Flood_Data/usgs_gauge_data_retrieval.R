@@ -206,6 +206,44 @@ floods_1992 <- floods_1992 |>
 write.csv(floods_1992, here("Flood_data/clean_data",
                             "floods_1992.csv"))
 
+#####
+#cleaning 1993-94 data
+discharge_1993_94 <- raw_1993_1994 |>
+  dplyr::select(monitoring_location_id, time, value) |>
+  rename(gauge_id = monitoring_location_id, 
+         cfs_value = value,
+         date_time_utc = time)
+
+#looking for possible floods
+pf_1993_94 <- discharge_1993_94 |>
+  filter(cfs_value >= 2300)
+
+#want to know the peak flood time for each day with a value over 2300, keeping duplicates
+pf_1993_94 <- pf_1993_94 |>
+  group_by(date = as.Date(date_time_utc, tz = "UTC")) |>
+  slice_max(cfs_value, n = 1) |>
+  ungroup()
+
+#now want to grab all readings from 48hrs before & 72hrs after each reading
+#first have to make windows for each flood peak
+windows_93_94 <- pf_1993_94 |>
+  transmute(window_start = date_time_utc - 48 * 3600,
+            window_end   = date_time_utc + 72 * 3600)
+
+#now to grab the rows that match the windows
+floods_1993_94 <- discharge_1993_94 |>
+  semi_join(windows_93_94, join_by(between(date_time_utc, window_start, window_end)))
+
+#now can make that dataset clean, splitting time and date from one another
+floods_1993_94 <- floods_1993_94 |>
+  mutate(date_pst = as.Date(date_time_utc, tz = "America/Los_Angeles"),
+         time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
+  relocate(date_pst, .after = date_time_utc) |>
+  relocate(time_pst, .after = date_pst)
+
+#save floods datset!
+write.csv(floods_1993_94, here("Flood_data/clean_data",
+                            "floods_1993_1994.csv"))
 
 #####
 #finding gaps in gauge readings
@@ -447,6 +485,9 @@ gaps_2022_24 <- raw_2022_2024 |>
          gap_total_days = gap_total_hours / 24) |>
   relocate(gap_total_days, .after = gap_total_hours)
 
+write.csv(gaps_2022_24, here("Flood_data/clean_data",
+                             "gauge_gaps_2022_2024.csv"))
+
 #gaps 2025
 gaps_2025 <- raw_2025 |>
   arrange(time) |>
@@ -460,4 +501,7 @@ gaps_2025 <- raw_2025 |>
   mutate(missing_readings = gap_total_hours * 4 - 1,
          gap_total_days = gap_total_hours / 24) |>
   relocate(gap_total_days, .after = gap_total_hours)
+
+write.csv(gaps_2025, here("Flood_data/clean_data",
+                             "gauge_gaps_2025.csv"))
 
