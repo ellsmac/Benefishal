@@ -18,13 +18,19 @@ library(here) #allows pointed file structure, essential for Mac to PC coding
 library(tidyverse)
 library(janitor)
 
-#Data Loading
+#Precip data loading
 t_precip_raw <- read.csv(here("Flood_Data/raw_data", "Temecula_Rainfall.csv"))
 t_precip <- t_precip_raw |>
   clean_names()
   #this is missing the July 2016 to June 2017 data, need to add in
 
+t_precip_2016_2017 <- read.csv(here("Flood_Data/raw_data", 
+                                    "temecula_daily_rainfall_FY2016-17.csv"))
 
+#precip data cleaning
+t_precip <- t_precip |>
+  mutate(month = match(month, month.abb))
+  #turning months into numbers to match my 2016-17 data and the gauge data when we merge it
 
 
 
