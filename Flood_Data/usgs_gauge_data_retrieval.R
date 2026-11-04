@@ -1,7 +1,7 @@
 # Retrieving SMR Flood Data, USGS Gauge 110443000
 # Author: E MacLean
 # Created: Nov 2, 2026
-# Modified: None
+# Modified: Nov 3, 2026
 ####################
 # Learning to pull USGS gauge data from our relevant gauge, testing to see if what I pull matches Quinn's pulls
 
@@ -25,7 +25,7 @@ dataavailable <- read_waterdata_ts_meta(
   monitoring_location_id = siteNumber)
   #row 6 tells us we can get discharge in points, does this mean continuous data?
 
-# Raw yearly continuous data
+#Retrieving raw yearly continuous data
 raw_1990 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                      parameter_code = parameterCd,
                                      time = c("1990-01-16", "1990-12-31"))
@@ -87,19 +87,14 @@ raw_2025 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                            parameter_code = parameterCd,
                                            time = c("2025-01-01", "2025-12-31"))
 
+###########
+
 #data cleaning, 1990
 discharge_1990 <- raw_1990 |>
   dplyr::select(monitoring_location_id, time, value) |>
   rename(gauge_id = monitoring_location_id, 
-         cfs_value = value) |>
-  mutate(date_pst = as.Date(time, tz = "America/Los_Angeles"),
-    time_pst = format(time, "%H:%M:%S", tz = "America/Los_Angeles")) |>
-  relocate(date_pst, .after = gauge_id) |>
-  relocate(time_pst, .after = date_pst) |>
-  dplyr::select(-time)
-    #this code drops all columns but monitoring_location_id, time, value
-    #then renames those columns, breaks time into date and time and converts both to pst
-    #sticks those new columns after gauge id, and then drops the original time column
+         cfs_value = value,
+         date_time_utc = time)
 
 #then finding all possible flood rows, pf = possible flood
 pf_1990 <- discharge_1990 |>
@@ -112,12 +107,8 @@ pf_1990 <- discharge_1990 |>
 discharge_1991 <- raw_1991 |>
   dplyr::select(monitoring_location_id, time, value) |>
   rename(gauge_id = monitoring_location_id, 
-         cfs_value = value) |>
-  mutate(date_pst = as.Date(time, tz = "America/Los_Angeles"),
-         time_pst = format(time, "%H:%M:%S", tz = "America/Los_Angeles")) |>
-  relocate(date_pst, .after = gauge_id) |>
-  relocate(time_pst, .after = date_pst) |>
-  dplyr::select(-time)
+         cfs_value = value,
+         date_time_utc = time)
 
 #then finding all possible flood rows, pf = possible flood
 pf_1991 <- discharge_1991 |>
@@ -127,112 +118,50 @@ pf_1991 <- discharge_1991 |>
 
 ########
 #data cleaning, 1992
+#can't switch to pst this early on, still need original time for id'ing floods, convert at end
 discharge_1992 <- raw_1992 |>
   dplyr::select(monitoring_location_id, time, value) |>
   rename(gauge_id = monitoring_location_id, 
-         cfs_value = value) |>
-  mutate(date_pst = as.Date(time, tz = "America/Los_Angeles"),
-         time_pst = format(time, "%H:%M:%S", tz = "America/Los_Angeles")) |>
-  relocate(date_pst, .after = gauge_id) |>
-  relocate(time_pst, .after = date_pst) |>
-  dplyr::select(-time)
+         cfs_value = value,
+         date_time_utc = time)
 
-#looking for possible floods
+#looking for possible floods, have to do in 
 pf_1992 <- discharge_1992 |>
   filter(cfs_value >= 2300)
   #68 rows returned where cfs is greater than or equal to 2300
 
-#but how many distinct dates for floods?
-pf_dates_1992 <- sort(unique(pf_1992$date_pst))
-  #gives me vector of all dates where cfs is greater than or equal to 2300
+#want to know the peak flood time for each day with a value over 2300, keeping duplicates
+pf_1992 <- pf_1992 |>
+  group_by(date = as.Date(date_time_utc, tz = "UTC")) |>
+  slice_max(cfs_value, n = 1) |>
+  ungroup()
 
-#creating a "flood window", a vector w/ flood dates AND seven days before and 1 after each flood date
-pf_window_1992 <-unique(rep(pf_dates_1992, each = 15) + -7:1)
-  #gives me vector w/ flood dates AND seven days before and 1 after each flood date
-  #this is my attempt at catching all of the floods and any info for storm events around flooding
+#now want to grab all readings from 48hrs before & 72hrs after each reading in pf_1992
+#first have to make windows for each flood peak
+windows_92 <- pf_1992 |>
+  transmute(window_start = date_time_utc - 48 * 3600,
+            window_end   = date_time_utc + 72 * 3600)
 
-#gauge data for potential flood windows, 1992
+#now to grab the rows that match the windows
 floods_1992 <- discharge_1992 |>
-  filter(date_pst %in% pf_window_1992)
+  semi_join(windows_92, join_by(between(date_time_utc, window_start, window_end)))
 
-#####
-#data cleaning, 1993 & 1994
-discharge_1993_94 <- raw_1993_1994 |>
-  dplyr::select(monitoring_location_id, time, value) |>
-  rename(gauge_id = monitoring_location_id, 
-         cfs_value = value) |>
-  mutate(date_pst = as.Date(time, tz = "America/Los_Angeles"),
-         time_pst = format(time, "%H:%M:%S", tz = "America/Los_Angeles")) |>
-  relocate(date_pst, .after = gauge_id) |>
-  relocate(time_pst, .after = date_pst) |>
-  dplyr::select(-time)
+#now can make that dataset clean, splitting time and date from one another
+floods_1992 <- floods_1992 |>
+  mutate(date_pst = as.Date(date_time_utc, tz = "America/Los_Angeles"),
+         time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
+  relocate(date_pst, .after = date_time_utc) |>
+  relocate(time_pst, .after = date_pst)
 
-#looking for possible floods
-pf_1993_94 <- discharge_1993_94 |>
-  filter(cfs_value >= 2300)
-#possible flood dates
-pf_dates_1993_94 <- sort(unique(pf_1993_94$date_pst))
-#possible flood date windows
-pf_window_1993_94 <-unique(rep(pf_dates_1993_94, each = 15) + -7:1)
-
-#gauge data for potential flood windows, 1993 & 1994
-floods_1993_94 <- discharge_1993_94 |>
-  filter(date_pst %in% pf_window_1993_94)
-  #huge data gap before 01/13/1993!
-
-####
-#data cleaning, 1995-1997
-discharge_1995_97 <- raw_1995_1997 |>
-  dplyr::select(monitoring_location_id, time, value) |>
-  rename(gauge_id = monitoring_location_id, 
-         cfs_value = value) |>
-  mutate(date_pst = as.Date(time, tz = "America/Los_Angeles"),
-         time_pst = format(time, "%H:%M:%S", tz = "America/Los_Angeles")) |>
-  relocate(date_pst, .after = gauge_id) |>
-  relocate(time_pst, .after = date_pst) |>
-  dplyr::select(-time)
-
-#looking for possible floods
-pf_1995_97 <- discharge_1995_97 |>
-  filter(cfs_value >= 2300)
-#possible flood dates
-pf_dates_1995_97 <- sort(unique(pf_1995_97$date_pst))
-#possible flood date windows
-pf_window_1995_97 <-unique(rep(pf_dates_1995_97, each = 15) + -7:1)
-
-#gauge data for potential flood windows, 1995-1997
-floods_1995_97 <- discharge_1995_97 |>
-  filter(date_pst %in% pf_window_1995_97)
-
-#####
-#data cleaning, 1998-2000
-discharge_1998_2000 <- raw_1998_2000 |>
-  dplyr::select(monitoring_location_id, time, value) |>
-  rename(gauge_id = monitoring_location_id, 
-         cfs_value = value) |>
-  mutate(date_pst = as.Date(time, tz = "America/Los_Angeles"),
-         time_pst = format(time, "%H:%M:%S", tz = "America/Los_Angeles")) |>
-  relocate(date_pst, .after = gauge_id) |>
-  relocate(time_pst, .after = date_pst) |>
-  dplyr::select(-time)
-
-#looking for possible floods
-pf_1998_2000 <- discharge_1998_2000 |>
-  filter(cfs_value >= 2300)
-#possible flood dates
-pf_dates_1998_2000 <- sort(unique(pf_1998_2000$date_pst))
-#possible flood date windows
-pf_window_1998_2000 <-unique(rep(pf_dates_1998_2000, each = 15) + -7:1)
-
-#gauge data for potential flood windows, 1998-2000
-floods_1998_2000 <- discharge_1998_2000 |>
-  filter(date_pst %in% pf_window_1998_2000)
+#save floods datset!
+write.csv(floods_1992, here("Flood_data/clean_data",
+                            "floods_1992.csv"))
 
 
 #####
 #finding gaps in gauge readings
 #run invidual years then turn into one big df for the whole time scale
-#going to have to drop any gaps smaller than 0.5
+#going to have to drop any gaps smaller than 0.5?
 #then do time conversion on gap_start & gap_end, then break into gap_date_start, gap_time_start, gap_date_end, gap_time_end
 #gaps in 1990
 gaps_1990 <- raw_1990 |>
