@@ -363,6 +363,298 @@ write.csv(floods_2001_03, here("Flood_data/clean_data",
                                "floods_2001_2003.csv"))
 
 #####
+#cleaning 2004-2006 data
+discharge_2004_06 <- raw_2004_2006 |>
+  dplyr::select(monitoring_location_id, time, value) |>
+  rename(gauge_id = monitoring_location_id, 
+         cfs_value = value,
+         date_time_utc = time)
+
+#looking for possible floods
+pf_2004_06 <- discharge_2004_06 |>
+  filter(cfs_value >= 2300)
+
+#want to know the peak flood time for each day with a value over 2300, keeping duplicates
+pf_2004_06 <- pf_2004_06 |>
+  group_by(date = as.Date(date_time_utc, tz = "UTC")) |>
+  slice_max(cfs_value, n = 1) |>
+  ungroup() |>
+  select(-date)
+
+#now to grab all readings from 48hrs before & 72hrs after each reading
+#first have to make windows for each flood peak
+windows_04_06 <- pf_2004_06 |>
+  transmute(window_start = date_time_utc - 48 * 3600,
+            window_end   = date_time_utc + 72 * 3600)
+
+#now to grab the rows that match the windows
+floods_2004_06 <- discharge_2004_06 |>
+  semi_join(windows_04_06, join_by(between(date_time_utc, window_start, window_end)))
+
+#now can make that dataset clean, splitting time and date from one another
+floods_2004_06 <- floods_2004_06 |>
+  mutate(date_pst = as.Date(date_time_utc, tz = "America/Los_Angeles"),
+         time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
+  relocate(date_pst, .after = date_time_utc) |>
+  relocate(time_pst, .after = date_pst)
+
+#save floods datset!
+write.csv(floods_2004_06, here("Flood_data/clean_data",
+                               "floods_2004_2006.csv"))
+
+#####
+#cleaning 2007-2009 data
+discharge_2007_09 <- raw_2007_2009 |>
+  dplyr::select(monitoring_location_id, time, value) |>
+  rename(gauge_id = monitoring_location_id, 
+         cfs_value = value,
+         date_time_utc = time)
+
+#looking for possible floods
+pf_2007_09 <- discharge_2007_09 |>
+  filter(cfs_value >= 2300)
+
+#want to know the peak flood time for each day with a value over 2300, keeping duplicates
+pf_2007_09 <- pf_2007_09 |>
+  group_by(date = as.Date(date_time_utc, tz = "UTC")) |>
+  slice_max(cfs_value, n = 1) |>
+  ungroup() |>
+  select(-date)
+
+#now to grab all readings from 48hrs before & 72hrs after each reading
+#first have to make windows for each flood peak
+windows_07_09 <- pf_2007_09 |>
+  transmute(window_start = date_time_utc - 48 * 3600,
+            window_end   = date_time_utc + 72 * 3600)
+
+#now to grab the rows that match the windows
+floods_2007_09 <- discharge_2007_09 |>
+  semi_join(windows_07_09, join_by(between(date_time_utc, window_start, window_end)))
+
+#now can make that dataset clean, splitting time and date from one another
+floods_2007_09 <- floods_2007_09 |>
+  mutate(date_pst = as.Date(date_time_utc, tz = "America/Los_Angeles"),
+         time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
+  relocate(date_pst, .after = date_time_utc) |>
+  relocate(time_pst, .after = date_pst)
+
+#save floods datset!
+write.csv(floods_2007_09, here("Flood_data/clean_data",
+                               "floods_2007_2009.csv"))
+
+#####
+#cleaning 2010-2012 data
+discharge_2010_2012 <- raw_2010_2012 |>
+  dplyr::select(monitoring_location_id, time, value) |>
+  rename(gauge_id = monitoring_location_id, 
+         cfs_value = value,
+         date_time_utc = time)
+
+#looking for possible floods
+pf_2010_2012 <- discharge_2010_2012 |>
+  filter(cfs_value >= 2300)
+
+#want to know the peak flood time for each day with a value over 2300, keeping duplicates
+pf_2010_2012 <- pf_2010_2012 |>
+  group_by(date = as.Date(date_time_utc, tz = "UTC")) |>
+  slice_max(cfs_value, n = 1) |>
+  ungroup() |>
+  select(-date)
+
+#now to grab all readings from 48hrs before & 72hrs after each reading
+#first have to make windows for each flood peak
+windows_10_12 <- pf_2010_2012 |>
+  transmute(window_start = date_time_utc - 48 * 3600,
+            window_end   = date_time_utc + 72 * 3600)
+
+#now to grab the rows that match the windows
+floods_2010_2012 <- discharge_2010_2012 |>
+  semi_join(windows_10_12, join_by(between(date_time_utc, window_start, window_end)))
+
+#now can make that dataset clean, splitting time and date from one another
+floods_2010_2012 <- floods_2010_2012 |>
+  mutate(date_pst = as.Date(date_time_utc, tz = "America/Los_Angeles"),
+         time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
+  relocate(date_pst, .after = date_time_utc) |>
+  relocate(time_pst, .after = date_pst)
+
+#save floods datset!
+write.csv(floods_2010_2012, here("Flood_data/clean_data",
+                               "floods_2010_2012.csv"))
+
+#####
+#cleaning 2013-2015 data
+discharge_2013_2015 <- raw_2013_2015 |>
+  dplyr::select(monitoring_location_id, time, value) |>
+  rename(gauge_id = monitoring_location_id, 
+         cfs_value = value,
+         date_time_utc = time)
+
+#looking for possible floods
+pf_2013_2015 <- discharge_2013_2015 |>
+  filter(cfs_value >= 2300)
+  #no floods in this dataset
+
+#####
+#cleaning 2016-2018 data
+discharge_2016_2018 <- raw_2016_2018 |>
+  dplyr::select(monitoring_location_id, time, value) |>
+  rename(gauge_id = monitoring_location_id, 
+         cfs_value = value,
+         date_time_utc = time)
+
+#looking for possible floods
+pf_2016_2018 <- discharge_2016_2018 |>
+  filter(cfs_value >= 2300)
+
+#want to know the peak flood time for each day with a value over 2300, keeping duplicates
+pf_2016_2018 <- pf_2016_2018 |>
+  group_by(date = as.Date(date_time_utc, tz = "UTC")) |>
+  slice_max(cfs_value, n = 1) |>
+  ungroup() |>
+  select(-date)
+
+#now to grab all readings from 48hrs before & 72hrs after each reading
+#first have to make windows for each flood peak
+windows_16_18 <- pf_2016_2018 |>
+  transmute(window_start = date_time_utc - 48 * 3600,
+            window_end   = date_time_utc + 72 * 3600)
+
+#now to grab the rows that match the windows
+floods_2016_2018 <- discharge_2016_2018 |>
+  semi_join(windows_16_18, join_by(between(date_time_utc, window_start, window_end)))
+
+#now can make that dataset clean, splitting time and date from one another
+floods_2016_2018 <- floods_2016_2018 |>
+  mutate(date_pst = as.Date(date_time_utc, tz = "America/Los_Angeles"),
+         time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
+  relocate(date_pst, .after = date_time_utc) |>
+  relocate(time_pst, .after = date_pst)
+
+#save floods datset!
+write.csv(floods_2016_2018, here("Flood_data/clean_data",
+                                 "floods_2016_2018.csv"))
+
+#####
+#cleaning 2019-2021 data
+discharge_2019_21 <- raw_2019_2021 |>
+  dplyr::select(monitoring_location_id, time, value) |>
+  rename(gauge_id = monitoring_location_id, 
+         cfs_value = value,
+         date_time_utc = time)
+
+#looking for possible floods
+pf_2019_21 <- discharge_2019_21 |>
+  filter(cfs_value >= 2300)
+
+#want to know the peak flood time for each day with a value over 2300, keeping duplicates
+pf_2019_21 <- pf_2019_21 |>
+  group_by(date = as.Date(date_time_utc, tz = "UTC")) |>
+  slice_max(cfs_value, n = 1) |>
+  ungroup() |>
+  select(-date)
+
+#now to grab all readings from 48hrs before & 72hrs after each reading
+#first have to make windows for each flood peak
+windows_19_21 <- pf_2019_21 |>
+  transmute(window_start = date_time_utc - 48 * 3600,
+            window_end   = date_time_utc + 72 * 3600)
+
+#now to grab the rows that match the windows
+floods_2019_2021 <- discharge_2019_21 |>
+  semi_join(windows_19_21, join_by(between(date_time_utc, window_start, window_end)))
+
+#now can make that dataset clean, splitting time and date from one another
+floods_2019_2021 <- floods_2019_2021 |>
+  mutate(date_pst = as.Date(date_time_utc, tz = "America/Los_Angeles"),
+         time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
+  relocate(date_pst, .after = date_time_utc) |>
+  relocate(time_pst, .after = date_pst)
+
+#save floods datset!
+write.csv(floods_2019_2021, here("Flood_data/clean_data",
+                                 "floods_2019_2021.csv"))
+
+#####
+#cleaning 2022-24 data
+discharge_2022_24 <- raw_2022_2024 |>
+  dplyr::select(monitoring_location_id, time, value) |>
+  rename(gauge_id = monitoring_location_id, 
+         cfs_value = value,
+         date_time_utc = time)
+
+#looking for possible floods
+pf_2022_24 <- discharge_2022_24 |>
+  filter(cfs_value >= 2300)
+
+#want to know the peak flood time for each day with a value over 2300, keeping duplicates
+pf_2022_24 <- pf_2022_24 |>
+  group_by(date = as.Date(date_time_utc, tz = "UTC")) |>
+  slice_max(cfs_value, n = 1) |>
+  ungroup() |>
+  select(-date)
+
+#now to grab all readings from 48hrs before & 72hrs after each reading
+#first have to make windows for each flood peak
+windows_22_24 <- pf_2022_24 |>
+  transmute(window_start = date_time_utc - 48 * 3600,
+            window_end   = date_time_utc + 72 * 3600)
+
+#now to grab the rows that match the windows
+floods_2022_24 <- discharge_2022_24 |>
+  semi_join(windows_22_24, join_by(between(date_time_utc, window_start, window_end)))
+
+#now can make that dataset clean, splitting time and date from one another
+floods_2022_24 <- floods_2022_24 |>
+  mutate(date_pst = as.Date(date_time_utc, tz = "America/Los_Angeles"),
+         time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
+  relocate(date_pst, .after = date_time_utc) |>
+  relocate(time_pst, .after = date_pst)
+
+#save floods datset!
+write.csv(floods_2022_24, here("Flood_data/clean_data",
+                                 "floods_2022_2024.csv"))
+#####
+#cleaning 2025 data
+discharge_2025 <- raw_2025 |>
+  dplyr::select(monitoring_location_id, time, value) |>
+  rename(gauge_id = monitoring_location_id, 
+         cfs_value = value,
+         date_time_utc = time)
+
+#looking for possible floods
+pf_2025 <- discharge_2025 |>
+  filter(cfs_value >= 2300)
+
+#want to know the peak flood time for each day with a value over 2300, keeping duplicates
+pf_2025 <- pf_2025 |>
+  group_by(date = as.Date(date_time_utc, tz = "UTC")) |>
+  slice_max(cfs_value, n = 1) |>
+  ungroup() |>
+  select(-date)
+
+#now to grab all readings from 48hrs before & 72hrs after each reading
+#first have to make windows for each flood peak
+windows_25 <- pf_2025 |>
+  transmute(window_start = date_time_utc - 48 * 3600,
+            window_end   = date_time_utc + 72 * 3600)
+
+#now to grab the rows that match the windows
+floods_2025 <- discharge_2025 |>
+  semi_join(windows_25, join_by(between(date_time_utc, window_start, window_end)))
+
+#now can make that dataset clean, splitting time and date from one another
+floods_2025 <- floods_2025 |>
+  mutate(date_pst = as.Date(date_time_utc, tz = "America/Los_Angeles"),
+         time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
+  relocate(date_pst, .after = date_time_utc) |>
+  relocate(time_pst, .after = date_pst)
+
+#save floods datset!
+write.csv(floods_2025, here("Flood_data/clean_data",
+                               "floods_2025.csv"))
+
+#####
 #finding gaps in gauge readings
 #run invidual years then turn into one big df for the whole time scale
 #going to have to drop any gaps smaller than 0.5?
