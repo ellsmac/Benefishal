@@ -20,17 +20,49 @@ library(janitor)
 
 #Precip data loading
 t_precip_raw <- read.csv(here("Flood_Data/raw_data", "Temecula_Rainfall.csv"))
-t_precip <- t_precip_raw |>
-  clean_names()
   #this is missing the July 2016 to June 2017 data, need to add in
 
 t_precip_2016_2017 <- read.csv(here("Flood_Data/raw_data", 
                                     "temecula_daily_rainfall_FY2016-17.csv"))
 
 #precip data cleaning
+t_precip_part <- t_precip_raw |>
+  clean_names()
+
+t_precip_part <- t_precip_part |>
+  rename(precip_inches = precipitation_inches,
+         month_abb = month)
+        #making column names match before joining
+
+t_precip_part <- t_precip_part |>
+  mutate(month = match(month_abb, month.abb)) |>
+  select(-month_abb)
+  #making month values match before joining
+
+t_precip_2016_2017 <- t_precip_2016_2017 |>
+  rename(precip_inches = precipitation_in)
+  #making column names match before joining
+
+t_precip <- t_precip_part |>
+  full_join(t_precip_2016_2017)
+  #adding all our precip actuals together!
+
 t_precip <- t_precip |>
-  mutate(month = match(month, month.abb))
-  #turning months into numbers to match my 2016-17 data and the gauge data when we merge it
+  mutate(date_pst = make_date(year, month, day)) |>
+  relocate(date_pst, .before = precip_inches)
+  #making a date column to match the date format in our flood datasets
+
+t_precip <- t_precip |>
+  drop_na(date_pst) |>
+  select(precip_inches, date_pst)
+
+write.csv(t_precip, here("Flood_data/clean_data", 
+                         "temecula_precip_actuals_2014_2024.csv"))
+  
+
+#precip data cleaning
+#put everyone into a single year, month, day format to match for joining
+#isolate peak flow for every day, then match precip to that, because precip is daily 
 
 
 
