@@ -58,6 +58,8 @@ t_precip <- t_precip |>
 
 write.csv(t_precip, here("Flood_data/clean_data", 
                          "temecula_precip_actuals_2014_2024.csv"))
+  #now can ignore the prior code, just read in temecula_precip_actuals_2014_2024 as t_precip
+  #to get the right stuff
  
 #isolate peak flow for every day, then match precip to that, because precip is daily 
 
@@ -102,7 +104,13 @@ floods_daily <- floods |>
   slice_max(cfs_value, by = date_pst, n = 1, with_ties = FALSE)
 
 write.csv(floods_daily, here("Flood_Data/clean_data", "daily_flood_buffer.csv"))
+  #saved daily max flows for flood events plus 
+  #the max values for the 48hrs before and 72hrs after each flood event
 
+#####
+#joining precip to flood data!
+flood_precip <- floods_daily |>
+  left_join(t_precip, by = "date_pst")
 
 
 
