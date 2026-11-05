@@ -1,7 +1,7 @@
-# Historical Precipiation & Flood Event Data Matching
+# Historical Precipiation & Flood Event Data Cleaning
 # Author: E MacLean
 # Created: Nov 2, 2026
-# Modified: Nov 3, 2026
+# Modified: Nov 4, 2026
 ####################
 # Goal of this script is to combine historical precipitation data w/ log of flood events
 # to get an idea of how precip is correlated w/ flooding
