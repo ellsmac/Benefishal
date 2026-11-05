@@ -3,8 +3,7 @@
 # Created: Nov 2, 2026
 # Modified: Nov 4, 2026
 ####################
-# Goal of this script is to combine historical precipitation data w/ log of flood events
-# to get an idea of how precip is correlated w/ flooding
+# Goal of this script is to clean precip and flood data enough to combine them!
 
 #Data Description
   #for flood data we have USGS gauge 110443000 (bridge gauge), flood incidents are
@@ -107,10 +106,26 @@ write.csv(floods_daily, here("Flood_Data/clean_data", "daily_flood_buffer.csv"))
   #saved daily max flows for flood events plus 
   #the max values for the 48hrs before and 72hrs after each flood event
 
-#####
-#joining precip to flood data!
-flood_precip <- floods_daily |>
-  left_join(t_precip, by = "date_pst")
+#loading in PRISM precip data for adding, 
+prism_precip <- read_csv(here("Flood_Data/raw_data",
+                              "PRISM_precip_SMR_1992_2025.txt"))
+
+prism_precip <- prism_precip |>
+  select(-...3)
+  #removing weird extra column
+
+prism_precip <- prism_precip |>
+  clean_names()
+
+prism_precip <- prism_precip |>
+  rename(prism_precip_in = precipitation_inches, 
+         date_pst = date)
+
+write_csv(prism_precip, here("Flood_Data/clean_data", 
+                             "prism_precip_clean.csv"))
+
+
+
 
 
 
