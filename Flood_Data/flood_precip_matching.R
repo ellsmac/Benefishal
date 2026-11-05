@@ -5,15 +5,30 @@
 ####################
 #goal of this script is to combine our cleaned precip and flood datasets!
 
+#clean enviro
+rm(list = ls())
+
 #loading data
 floods_daily <- read_csv(here("Flood_Data/clean_data",
                               "daily_flood_buffer.csv"))
 
 t_precip <- read_csv(here("Flood_data/clean_data", 
      "temecula_precip_actuals_2014_2024.csv"))
+      #will load with annoying extra column called "...1"
+
+prism_precip <- read_csv(here("Flood_Data/clean_data",
+                              "prism_precip_clean.csv"))
 
 
 #####
 #joining actual precip to flood data!
 flood_precip <- floods_daily |>
   left_join(t_precip, by = "date_pst")
+
+
+
+
+
+
+
+
