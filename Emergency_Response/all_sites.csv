@@ -1,0 +1,8 @@
+source,fdid,dept_sta,station_no,origin_name,origin_address,origin_status,origin_lat,origin_lon
+NCFPD,37075,01,1,NCFPD Station 1,"315 East Ivy Street, Fallbrook, CA 92028",provisional_station_code_match,33.383623526508,-117.249065928903
+NCFPD,37075,02,2,NCFPD Station 2,"2180 Winterwarm Drive, Fallbrook, CA 92028",provisional_station_code_match,33.34464822296,-117.213205335574
+NCFPD,37075,03,3,NCFPD Station 3,"2309 Rainbow Valley Boulevard, Fallbrook, CA 92028",provisional_station_code_match,33.414092821734,-117.147593865797
+NCFPD,37075,04,4,NCFPD Station 4,"4375 Pala Mesa Drive, Fallbrook, CA 92028",provisional_station_code_match,33.340429262611,-117.160148449819
+NCFPD,37075,05,5,NCFPD Station 5,"5906 Olive Hill Road, Bonsall, CA 92003",provisional_station_code_match,33.289603983341,-117.229242851451
+Riverside,33115,RRU,NA,CAL FIRE Riverside Unit Headquarters,"210 W San Jacinto Ave, Perris, CA 92570",headquarters_not_verified_apparatus_origin,33.786648569891,-117.229874161015
+also_riverside,33115,NA,NA,Temecula Civic Center,"41000 Main St, Temecula, CA, 92590",registered_department_address_not_verified_apparatus_origin,33.49467965937,-117.147397649077
