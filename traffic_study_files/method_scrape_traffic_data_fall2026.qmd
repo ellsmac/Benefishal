@@ -43,7 +43,7 @@ traffic_data_2019 <- traffic_data_2019_orig |>
 ## Load Data
 
 ```{r}
-traffic_data_2024_orig <- read_csv(here("data", "volume_2024-10-15.csv"))
+traffic_data_2024_orig <- read_csv(here("traffic_study_data", "volume_2024-10-15.csv"))
 ```
 
 ## Make data "tidy"
@@ -66,5 +66,5 @@ traffic_data <- bind_rows(traffic_data_2019, traffic_data_2024)
 ## Save as CSV
 
 ```{r}
-write_csv(traffic_data, here("data", "traffic_data.csv"))
+write_csv(traffic_data, here("traffic_study_data", "traffic_data.csv"))
 ```
