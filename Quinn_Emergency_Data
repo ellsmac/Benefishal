@@ -489,7 +489,7 @@ Incidents_2025_fixed <- Incidents_2025  %>%
   )
 
 
-#Code translator
+#This is the code translator for incident types
 code_lookup <- tribble(
   ~code,          ~code_name,
   "111",  "Building Fire",
@@ -538,7 +538,7 @@ code_lookup <- tribble(
   "911",  "Special type of incident, other.")
 
 
-#Action taken
+#This is the look-up table for actions taken
 
 action_taken_codes <- tribble(
   ~code,          ~code_name,
@@ -621,11 +621,15 @@ tactics as appropriate",
   "0",  "Action taken, other")
 
 #source https://www.usfa.fema.gov/downloads/pdf/nfirs/nfirs_complete_reference_guide_2015.pdf
+
+
 ###################
-#Stacking everything
+
+#Stacking all years with bind rows
+
 ####################
 
-library(dplyr)
+
 
 Incidents_2014_2018 <- bind_rows(
   "2014" = Incidents_2014_fixed %>%
@@ -647,6 +651,9 @@ Incidents_2014_2018 <- bind_rows(
 ) %>%
   mutate(source_year = as.integer(source_year)) %>%
   arrange(alarm_datetime)
+
+#THIS WILL BE CHANGED IN THE FUTURE. I HAVE NOT YET WORKED WITH NFIRS DATA 
+#PULLED FROM WEBSITE. THIS WAS PULLED FROM ARCGIS PRO BEFORE I KNEW ABOUT THE WEBSITE
 
 Incidents_2019_2025 <- bind_rows(
   "2019" = Incidents_2019_fixed%>%
@@ -692,8 +699,12 @@ Incidents_2019_2025 <- bind_rows(
   arrange(alarm_datetime)
 
 ##################
+
 #translating the incidents
+
 ###################
+
+#THIS TRANSLATES THE INCIDENT CODES INTO NFIRS DESCRIPTIONS
 
 translated_incidents_2014_2018 <- Incidents_2014_2018 %>%
   mutate(
@@ -742,3 +753,350 @@ translated_incidents_2014_2018 <- Incidents_2014_2018 %>%
   
   arrange(desc(fdid))
 
+######################
+
+# Adding True/False variable for the emergency incidents
+# based on alarm time.
+
+############################
+
+flood_start <- Flood_summary_11044300_new$start_time
+flood_end   <- Flood_summary_11044300_new$end_time
+
+Incidents_2014_2018_flood <- Incidents_2014_2018 %>%
+  mutate(
+    flooded_conditions = vapply(
+      alarm_datetime,
+      function(x) {
+        if (is.na(x)) return(NA)
+        
+        any(
+          x >= flood_start & x <= flood_end,
+          na.rm = TRUE
+        )
+      },
+      logical(1)
+    )
+  )
+  
+#######################
+
+# Calculating travel times with 
+# Tidygeocoder 
+
+#######################
+library(tidygeocoder)
+library(stringr)
+library(dplyr)
+library(purrr)
+
+address_lookup <- Incidents_2014_2018 %>% #this grabs the addresses 
+  transmute(                             #and makes a lookup table
+    match_addr = str_squish(as.character(match_addr))
+  ) %>%
+  filter(
+    !is.na(match_addr),
+    match_addr != ""
+  ) %>%
+  distinct(match_addr) %>%
+  mutate(address_id = row_number())
+
+#This splits up the address limit so tidygeocoder doesnt break
+address_batches <- split(
+  address_lookup,
+  ceiling(seq_len(nrow(address_lookup)) / 9000)
+)
+
+# These are the functions used to assign census blocks to each address 
+census_lookup <- map_dfr(
+  address_batches,
+  function(x) {
+    
+    geocode(
+      x,
+      address = "match_addr",
+      method = "census",
+      full_results = TRUE,
+      
+      # Return census geography information
+      api_options = list(
+        census_return_type = "geographies"
+      ),
+      
+      # Use 2010 Census geographic boundaries
+      custom_query = list(
+        benchmark = "Public_AR_Current",
+        vintage = "Census2010_Current"
+      ),
+      
+      batch_limit = 9000,
+      verbose = TRUE
+    )
+  }
+)
+census_lookup <- map_dfr(
+  address_batches,
+  function(x) {
+    
+    geocode(
+      x,
+      address = "match_addr",
+      method = "census",
+      full_results = TRUE,
+      
+      # Return census geography information
+      api_options = list(
+        census_return_type = "geographies"
+      ),
+      
+      # Use 2010 Census geographic boundaries
+      custom_query = list(
+        benchmark = "Public_AR_Current",
+        vintage = "Census2010_Current"
+      ),
+      
+      batch_limit = 9000,
+      verbose = TRUE
+    )
+  }
+)
+
+##############################
+
+# Generate the addresse'and join
+# to the master flood data
+
+##############################
+
+census_lookup <- census_lookup %>%
+  mutate(
+    
+    block_geoid_2010 = if_else(
+      !is.na(state_fips) &
+        !is.na(county_fips) &
+        !is.na(census_tract) &
+        !is.na(census_block),
+      
+      paste0(
+        state_fips,
+        county_fips,
+        census_tract,
+        census_block
+      ),
+      
+      NA_character_
+    ),
+    
+    # First digit of the block identifies the block group
+    block_group_geoid_2010 = if_else(
+      !is.na(block_geoid_2010),
+      
+      paste0(
+        state_fips,
+        county_fips,
+        census_tract,
+        substr(census_block, 1, 1)
+      ),
+      
+      NA_character_
+    )
+  )
+
+Incidents_2014_2018_census <- Incidents_2014_2018 %>%
+  left_join(
+    census_lookup %>%
+      select(
+        match_addr,
+        lat,
+        long,
+        match_indicator,
+        match_type,
+        matched_address,
+        state_fips,
+        county_fips,
+        census_tract,
+        census_block,
+        block_geoid_2010,
+        block_group_geoid_2010
+      ),
+    by = "match_addr"
+  )
+
+#
+# this tallies the number of emergencies in
+# each census block
+#
+
+Emergency_by_block <- Incidents_2014_2018_census %>%
+  filter(!is.na(block_geoid_2010)) %>%
+  group_by(
+    block_geoid_2010,
+    flooded_conditions
+  ) %>%
+  summarise(
+    total_incidents = n(),
+    mean_response_min = mean(
+      response_time_min,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+#Isolates the census block GEOIDS
+
+Incidents_2014_2018_flood_geo <- Incidents_2014_2018_flood %>%
+  left_join(
+    census_lookup %>%
+      select(match_addr, block_geoid_2010) %>%
+      distinct(),
+    by = "match_addr"
+  )
+  
+###############################
+
+# this calculates flood travel time 
+# using historical alarm response values
+
+###############################
+  
+  Incidents_2014_2018_flood_block <- Incidents_2014_2018_flood_geo %>%
+  
+  # Add emergency counts by census block and flood condition
+  left_join(
+    emergency_by_block,
+    by = c(
+      "block_geoid_2010",
+      "flooded_conditions"
+    )
+  ) %>%
+  
+  # Standardize incident and action codes
+  mutate(
+    across(
+      c(inc_type, act_tak1, act_tak2, act_tak3),
+      as.character
+    )
+  ) %>%
+  
+  # Translate incident type
+  left_join(
+    code_lookup %>%
+      transmute(
+        code = as.character(code),
+        inc_type_name = code_name
+      ),
+    by = c("inc_type" = "code")
+  ) %>%
+  
+  # Translate first action
+  left_join(
+    action_taken_codes %>%
+      transmute(
+        code = as.character(code),
+        act_tak1_name = code_name
+      ),
+    by = c("act_tak1" = "code")
+  ) %>%
+  
+  # Translate second action
+  left_join(
+    action_taken_codes %>%
+      transmute(
+        code = as.character(code),
+        act_tak2_name = code_name
+      ),
+    by = c("act_tak2" = "code")
+  ) %>%
+  
+  # Translate third action
+  left_join(
+    action_taken_codes %>%
+      transmute(
+        code = as.character(code),
+        act_tak3_name = code_name
+      ),
+    by = c("act_tak3" = "code")
+  ) %>%mutate(
+    response_time_min = as.numeric(
+      difftime(arrival_datetime, alarm_datetime, units = "mins")
+    ))%>%
+  
+  arrange(alarm_datetime)
+  
+#################################
+
+# Address Coordinates
+
+#################################
+  
+address_coordinates <- census_lookup %>%
+  select(
+    match_addr,
+    lat,
+    long,
+    match_indicator,
+    match_type,
+    matched_address
+  ) %>%
+  mutate(
+    latitude = as.numeric(lat),
+    longitude = as.numeric(long)
+  ) %>%
+  select(
+    match_addr,
+    latitude,
+    longitude,
+    match_indicator,
+    match_type,
+    matched_address
+  )
+
+Incidents_2014_2018_flood_xy <- Incidents_2014_2018_flood_block %>%
+  left_join(
+    address_coordinates,
+    by = "match_addr",
+    relationship = "many-to-one"
+  ) %>%
+  arrange(alarm_datetime)
+
+#######################
+
+# Response time statists
+
+#########################
+
+flood_response_times<-Incidents_2014_2018_flood_xy%>%
+  filter(flooded_conditions=="TRUE")%>%
+  summarize(mean_flood = mean(response_time_min, na.rm = TRUE),
+stdev_flood= sd(response_time_min, na.rm = TRUE),
+IQR_flood= IQR(response_time_min, na.rm = TRUE),
+max_flood= max(response_time_min, na.rm = TRUE),
+min_flood= min(response_time_min, na.rm = TRUE))
+
+
+standard_response_times<-Incidents_2014_2018_flood_xy%>%
+  filter(flooded_conditions=="FALSE")%>%
+  summarize(mean_std = mean(response_time_min, na.rm = TRUE),
+            stdev_std= sd(response_time_min, na.rm = TRUE),
+            IQR_std= IQR(response_time_min, na.rm = TRUE),
+            max_std= max(response_time_min, na.rm = TRUE),
+            min_std= min(response_time_min, na.rm = TRUE))
+               
+
+medical_flood_response_times<-Incidents_2014_2018_flood_xy%>%
+  filter(flooded_conditions=="TRUE",
+         between(inc_type,300,399))%>%
+  summarize(mean_flood = mean(response_time_min, na.rm = TRUE),
+            stdev_flood= sd(response_time_min, na.rm = TRUE),
+            IQR_flood= IQR(response_time_min, na.rm = TRUE),
+            max_flood= max(response_time_min, na.rm = TRUE),
+            min_flood= min(response_time_min, na.rm = TRUE))
+
+medical_standard_response_times<-Incidents_2014_2018_flood_xy%>%
+  filter(flooded_conditions=="FALSE",
+         between(inc_type,300,399))%>%
+  summarize(mean_std = mean(response_time_min, na.rm = TRUE),
+            stdev_std= sd(response_time_min, na.rm = TRUE),
+            IQR_std= IQR(response_time_min, na.rm = TRUE),
+            max_std= max(response_time_min, na.rm = TRUE),
+            min_std= min(response_time_min, na.rm = TRUE))

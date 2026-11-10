@@ -143,25 +143,80 @@ tracts_in_extent <- st_crop(
 #this allows us to assign emergency incidents to tracts and blocks.
 
 # ------------------------------------------------------------
-# 5. Assign incidents to Census blocks and tracts
+# 5. Repair Census block geometries and assign incidents
 # ------------------------------------------------------------
 
-#*this code performs a spacial join and connects the incidents to blocks and tracts
-incidents_spatially_assigned <- st_join(
+# 5A. Repair Census block polygons
+blocks_in_extent_valid <- blocks_in_extent %>%
+  st_transform(26911) %>%
+  st_make_valid() %>%
+  st_collection_extract("POLYGON") %>%
+  filter(!st_is_empty(geometry))
+
+# Check polygon validity
+block_validity_check <- tibble(
+  total_blocks = nrow(blocks_in_extent_valid),
+  valid_blocks = sum(st_is_valid(blocks_in_extent_valid)),
+  invalid_blocks = sum(!st_is_valid(blocks_in_extent_valid))
+)
+
+print(block_validity_check)
+
+# Stop if any invalid geometries remain
+stopifnot(all(st_is_valid(blocks_in_extent_valid)))
+
+
+# 5B. Transform incident points to the same projected CRS
+incident_points_map <- Incidents_2014_2018_flood_xy %>%
+  mutate(
+    longitude = as.numeric(longitude),
+    latitude = as.numeric(latitude)
+  ) %>%
+  filter(
+    is.finite(longitude),
+    is.finite(latitude),
+    between(longitude, -117.40, -117.14),
+    between(latitude, 33.25, 33.82)
+  ) %>%
+  st_as_sf(
+    coords = c("longitude", "latitude"),
+    crs = 4326,
+    remove = FALSE
+  )
+
+# Transform incident points to UTM Zone 11N
+incident_points_map_utm <- st_transform(
   incident_points_map,
-  blocks_in_extent %>%
+  26911
+)
+
+# Check number of incident points
+cat("Incident points created:", nrow(incident_points_map_utm), "\n")
+
+
+# 5C. Perform spatial join using repaired geometries
+incidents_spatially_assigned_utm <- st_join(
+  incident_points_map_utm,
+  
+  blocks_in_extent_valid %>%
     select(
       block_geoid_tiger,
       tract_geoid_tiger
     ),
+  
   join = st_within,
   left = TRUE
 )
 
-# Check incident assignment
-#this codes lets us know how many incidents have a tract and block
-# and how many do not 
-#the drop geometry allows us to remove the spacial component to do summary statistic
+
+# 5D. Transform assigned incidents back to longitude/latitude
+incidents_spatially_assigned <- st_transform(
+  incidents_spatially_assigned_utm,
+  4326
+)
+
+
+# 5E. Check Census block assignment
 incident_assignment_check <- incidents_spatially_assigned %>%
   st_drop_geometry() %>%
   summarise(
@@ -216,6 +271,7 @@ if (!"name" %in% names(osm_roads)) {
 }
 
 # Extract the three requested roads
+options(na.print = "NA")
 named_roads_map <- osm_roads %>%
   filter(!is.na(name)) %>%
   mutate(
@@ -242,17 +298,99 @@ named_roads_map <- osm_roads %>%
   st_transform(4326)
 
 # Check which roads were retrieved
-named_roads_map %>%
-  st_drop_geometry() %>%
-  distinct(name, road_name) %>%
-  arrange(road_name) %>%
-  print(n = Inf)
+# Create a regular data frame instead of a tibble
+road_names_check <- named_roads_map %>%
+  sf::st_drop_geometry() %>%
+  dplyr::distinct(name, road_name) %>%
+  dplyr::arrange(road_name) %>%
+  as.data.frame()
+
+# Print using base R
+base::print(
+  road_names_check,
+  row.names = FALSE
+)
 
 
 # ------------------------------------------------------------
 # 8. Retrieve Santa Margarita River
 # ------------------------------------------------------------
 
+origin_lookup <- all_sites %>%
+  mutate(
+    fdid = as.character(fdid),
+    dept_sta = as.character(dept_sta),
+    
+    origin_id = case_when(
+      source == "NCFPD" ~ paste0("NCFPD_", dept_sta),
+      
+      source == "Riverside" ~ "RIVERSIDE_RRU_PERRIS",
+      
+      source == "also_riverside" ~ "TEMECULA_CIVIC_CENTER"
+    ),
+    
+    origin_group = case_when(
+      source == "NCFPD" ~ "NCFPD",
+      source == "Riverside" ~ "Riverside_Unit",
+      source == "also_riverside" ~ "Temecula"
+    )
+  )
+
+
+origin_lookup_extent <- origin_lookup %>%
+  mutate(
+    origin_lon = as.numeric(origin_lon),
+    origin_lat = as.numeric(origin_lat)
+  ) %>%
+  filter(
+    is.finite(origin_lon),
+    is.finite(origin_lat)
+  ) %>%
+  distinct(origin_id, .keep_all = TRUE)
+
+# Verify origin count
+nrow(origin_lookup_extent)
+
+# Inspect origins
+origin_lookup_extent %>%
+  select(
+    origin_id,
+    origin_name,
+    origin_group,
+    origin_lon,
+    origin_lat,
+    origin_status
+  ) %>%
+  print(n = Inf)
+
+options(
+  osrm.server = "https://routing.openstreetmap.de/",
+  osrm.profile = "car"
+)
+route_point_coords <- bind_rows(
+  origin_lookup_extent %>%
+    transmute(
+      lon = as.numeric(origin_lon),
+      lat = as.numeric(origin_lat)
+    ),
+  
+  routing_incidents %>%
+    transmute(
+      lon = as.numeric(longitude),
+      lat = as.numeric(latitude)
+    )
+) %>%
+  filter(is.finite(lon), is.finite(lat))
+
+road_bbox <- c(
+  min(route_point_coords$lon) - 0.05,
+  min(route_point_coords$lat) - 0.05,
+  max(route_point_coords$lon) + 0.05,
+  max(route_point_coords$lat) + 0.05
+)
+
+print(road_bbox)
+# Retrieve Santa Margarita River
 river_query <- osmdata::opq(
   bbox = road_bbox,
   timeout = 180
@@ -267,25 +405,14 @@ river_data <- osmdata::osmdata_sf(
   quiet = FALSE
 )
 
-osm_santa_margarita <- river_data$osm_lines
-
-if (is.null(osm_santa_margarita) ||
-    nrow(osm_santa_margarita) == 0) {
-  stop("No OSM river geometries were returned.")
-}
-
-if (!"name" %in% names(osm_santa_margarita)) {
-  osm_santa_margarita$name <- NA_character_
-}
-
-osm_santa_margarita <- osm_santa_margarita %>%
+osm_santa_margarita <- river_data$osm_lines %>%
   filter(
     str_detect(
-      coalesce(name, ""), #Replaces missing names with empty strings
-      regex("Santa Margarita", ignore_case = TRUE) #search is case-insensitive 
+      coalesce(name, ""),
+      regex("Santa Margarita", ignore_case = TRUE)
     )
   ) %>%
-  st_transform(4326)
+  st_transform(26911)
 
 
 # ------------------------------------------------------------
@@ -371,7 +498,8 @@ map_colors <- c(
 # ------------------------------------------------------------
 # 12. Generate final map
 # ------------------------------------------------------------
-
+map_xlim <- c(-117.40, -117.14)  # West to East
+map_ylim <- c(33.25, 33.82)      # South to North
 sandia_emergency_map <- ggplot() +
   
   # Census blocks
