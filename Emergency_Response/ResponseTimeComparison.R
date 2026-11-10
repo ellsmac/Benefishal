@@ -3,6 +3,9 @@ library(dplyr)
 library(tidyr)
 library(osrm)
 library(ggplot2)
+library(maptiles)
+library(terra)
+library(tidyterra)
 
 df1 <- read.csv(here("Emergency_Response/Incidents_2014_2018_block.csv"))
 df2 <- read.csv(here("Emergency_Response/Incidents_2014_2018_xy.csv"))
@@ -74,3 +77,41 @@ ggplot(subdf, aes(x = osrm_duration, y = response_time_min,color = dept_sta)) +
   labs(x = "Predicted Duration", y = "Actual Response Time")
 
 
+
+
+
+
+
+bbox <- sf::st_bbox(c(
+  xmin = min(df$longitude, na.rm = TRUE),
+  ymin = min(df$latitude, na.rm = TRUE),
+  xmax = max(df$longitude, na.rm = TRUE),
+  ymax = max(df$latitude, na.rm = TRUE)
+), crs = sf::st_crs(4326))
+
+bbox <- sf::st_as_sfc(bbox)
+
+basemap <- get_tiles(
+  bbox,
+  provider = "OpenStreetMap",
+  zoom = 12
+)
+
+
+ggplot() +
+  tidyterra::geom_spatraster_rgb(data = basemap) +
+  geom_point(
+    data = df %>% drop_na(dept_sta),
+    #data = df_na,
+    aes(x = longitude, y = latitude, color = as.factor(dept_sta)),
+    size = 1
+  ) +
+  geom_point(
+    data = df_stations,
+    aes(x = origin_lon, y = origin_lat, color = as.factor(dept_sta)),
+    shape = 17,
+    size = 3
+  ) +
+  coord_sf(crs = 4326) +
+  theme_minimal() +
+  labs(color = "Station")
