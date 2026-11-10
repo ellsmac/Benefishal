@@ -101,8 +101,8 @@ basemap <- get_tiles(
 ggplot() +
   tidyterra::geom_spatraster_rgb(data = basemap) +
   geom_point(
-    #data = df %>% drop_na(dept_sta),
-    data = df_na,
+    data = df %>% drop_na(dept_sta),
+    #data = df_na,
     aes(x = longitude, y = latitude, color = as.factor(dept_sta)),
     size = 1
   ) +
