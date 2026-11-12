@@ -153,6 +153,11 @@ OVERPASS_FALLBACK_URLS <- c(
   "https://overpass.kumi.systems/api/interpreter"
 )
 
+# Harris Trail routing diagnostic point.
+# This identifies a potential branch location, NOT a mandatory stop.
+HARRIS_TURN_LAT <- 33.408660
+HARRIS_TURN_LON <- -117.273281
+HARRIS_TURN_MAX_SNAP_M <- 100
 # ---------------------------------------------------------------------------
 # 1. PACKAGES, SESSION SETTINGS, INPUT DATA
 # ---------------------------------------------------------------------------
@@ -1005,54 +1010,175 @@ message(
   sum(!north_side_keep), "."
 )
 
+
+# ============================================================================
+# 13. SNAP 2020 BLOCK DESTINATIONS, HARRIS TRAIL, AND RESPONSE ORIGINS
+# ============================================================================
+
 # ---------------------------------------------------------------------------
-# 13. SNAP 2020 BLOCK DESTINATIONS AND DETOUR WAYPOINTS TO NORTH-SIDE ROADS
+# 13A. GENERAL ROAD-SNAPPING FUNCTION
 # ---------------------------------------------------------------------------
 
-snap_points_to_named_road <- function(points_df, roads_sf, lon_col, lat_col, id_col, name_filter = NULL) {
+snap_points_to_named_road <- function(
+    points_df,
+    roads_sf,
+    lon_col,
+    lat_col,
+    id_col = NULL,
+    name_filter = NULL
+) {
+  
+  # Validate input data.
+  if (!inherits(roads_sf, "sf")) {
+    stop("roads_sf must be an sf object.")
+  }
+  
+  if (nrow(points_df) == 0) {
+    stop("No input points were supplied for road snapping.")
+  }
+  
+  required_coordinate_columns <- c(lon_col, lat_col)
+  
+  if (!all(required_coordinate_columns %in% names(points_df))) {
+    stop(
+      "Missing coordinate columns: ",
+      paste(
+        setdiff(required_coordinate_columns, names(points_df)),
+        collapse = ", "
+      )
+    )
+  }
+  
+  if (!is.null(id_col) && !id_col %in% names(points_df)) {
+    stop("The specified id_col does not exist in points_df.")
+  }
+  
+  # Optionally restrict candidate roads by name.
   roads_use <- roads_sf
+  
   if (!is.null(name_filter)) {
     roads_use <- roads_use %>%
-      filter(str_detect(coalesce(as.character(name), ""), regex(name_filter, ignore_case = TRUE)))
+      filter(
+        str_detect(
+          coalesce(as.character(name), ""),
+          regex(name_filter, ignore_case = TRUE)
+        )
+      )
   }
-  if (nrow(roads_use) == 0) stop("No matching north-side road features found for snap: ", name_filter)
   
+  # Remove empty geometries.
+  roads_use <- roads_use[!st_is_empty(roads_use), ]
+  
+  if (nrow(roads_use) == 0) {
+    stop("No usable road features found for snap: ", name_filter)
+  }
+  
+  # Validate input coordinates.
+  input_lon <- suppressWarnings(
+    as.numeric(points_df[[lon_col]])
+  )
+  
+  input_lat <- suppressWarnings(
+    as.numeric(points_df[[lat_col]])
+  )
+  
+  if (
+    any(!is.finite(input_lon)) ||
+    any(!is.finite(input_lat))
+  ) {
+    stop("One or more input points have invalid longitude/latitude values.")
+  }
+  
+  if (
+    any(abs(input_lon) > 180) ||
+    any(abs(input_lat) > 90)
+  ) {
+    stop("One or more input coordinates fall outside valid WGS84 bounds.")
+  }
+  
+  # Transform road features and input points to UTM.
   roads_use_utm <- st_transform(roads_use, 26911)
+  
   points_utm <- st_as_sf(
     points_df,
     coords = c(lon_col, lat_col),
     crs = 4326,
     remove = FALSE
-  ) %>% st_transform(26911)
+  ) %>%
+    st_transform(26911)
   
-  nearest_idx <- st_nearest_feature(points_utm, roads_use_utm)
+  # Find the nearest road feature for each point.
+  nearest_idx <- st_nearest_feature(
+    points_utm,
+    roads_use_utm
+  )
+  
+  if (anyNA(nearest_idx)) {
+    stop("Could not identify a nearest road feature for every point.")
+  }
+  
   nearest_geometries <- st_geometry(roads_use_utm)[nearest_idx]
   
-  snap_xy <- matrix(NA_real_, nrow(points_df), 2)
+  snap_xy <- matrix(
+    NA_real_,
+    nrow = nrow(points_df),
+    ncol = 2
+  )
+  
   snap_distance <- rep(NA_real_, nrow(points_df))
   nearest_name <- rep(NA_character_, nrow(points_df))
   nearest_highway <- rep(NA_character_, nrow(points_df))
   
+  # Calculate perpendicular projection onto the nearest road geometry.
   for (i in seq_len(nrow(points_df))) {
+    
     connector <- st_nearest_points(
       st_geometry(points_utm)[i],
       nearest_geometries[i]
     )
+    
     cc <- st_coordinates(connector)
+    
+    if (nrow(cc) < 2) {
+      stop("Invalid nearest-road connector for input point ", i, ".")
+    }
+    
+    # Final connector coordinate is the point on the road.
     road_xy <- cc[nrow(cc), 1:2]
+    
     snap_xy[i, ] <- road_xy
-    snap_distance[i] <- as.numeric(st_distance(st_geometry(points_utm)[i], nearest_geometries[i]))
-    nearest_name[i] <- as.character(roads_use$name[nearest_idx[i]])
-    nearest_highway[i] <- as.character(roads_use$highway[nearest_idx[i]])
+    
+    snap_distance[i] <- as.numeric(
+      st_distance(
+        st_geometry(points_utm)[i],
+        nearest_geometries[i]
+      )
+    )
+    
+    nearest_name[i] <- as.character(
+      roads_use$name[nearest_idx[i]]
+    )
+    
+    nearest_highway[i] <- as.character(
+      roads_use$highway[nearest_idx[i]]
+    )
   }
   
+  # Convert snapped coordinates back to WGS84.
   snap_points_wgs84 <- st_sfc(
-    lapply(seq_len(nrow(snap_xy)), function(i) st_point(snap_xy[i, ])),
+    lapply(
+      seq_len(nrow(snap_xy)),
+      function(i) st_point(snap_xy[i, ])
+    ),
     crs = 26911
-  ) %>% st_transform(4326)
-  snap_coordinates_wgs84 <- st_coordinates(snap_points_wgs84)
+  ) %>%
+    st_transform(4326)
   
-  points_df %>%
+  snap_coordinates_wgs84 <- st_coordinates(
+    snap_points_wgs84
+  )
+  
+  result <- points_df %>%
     mutate(
       routing_lon = snap_coordinates_wgs84[, 1],
       routing_lat = snap_coordinates_wgs84[, 2],
@@ -1060,13 +1186,174 @@ snap_points_to_named_road <- function(points_df, roads_sf, lon_col, lat_col, id_
       nearest_road_name = nearest_name,
       nearest_road_highway = nearest_highway
     )
+  
+  # Final output validation.
+  if (
+    any(!is.finite(result$routing_lon)) ||
+    any(!is.finite(result$routing_lat)) ||
+    any(!is.finite(result$distance_to_road_m))
+  ) {
+    stop("Road snapping produced invalid output coordinates or distances.")
+  }
+  
+  result
 }
 
-# Initial road-access locations for every 2020 block are snapped ONLY to the
-# north-side motorcar network. The straight-line access gap is retained in
-# the table and is not silently treated as drivable network distance.
+
+# ---------------------------------------------------------------------------
+# 13B. HARRIS TRAIL DIAGNOSTIC ROUTING POINT
+# ---------------------------------------------------------------------------
+
+# Harris Trail coordinate is a diagnostic graph node, not a mandatory stop.
+# Prefer a Harris-named road segment if one is within the snap threshold.
+# Otherwise, test the nearest retained motorcar road and document its name.
+
+harris_turn_input <- tibble(
+  point_id = "HARRIS_TRAIL_TURN",
+  longitude = HARRIS_TURN_LON,
+  latitude = HARRIS_TURN_LAT
+)
+
+harris_road_segments <- roads_closed_prefix %>%
+  filter(
+    str_detect(
+      coalesce(as.character(name), ""),
+      regex("Harris", ignore_case = TRUE)
+    )
+  )
+
+harris_named_snap <- NULL
+
+if (nrow(harris_road_segments) > 0) {
+  
+  harris_named_snap <- snap_points_to_named_road(
+    points_df = harris_turn_input,
+    roads_sf = harris_road_segments,
+    lon_col = "longitude",
+    lat_col = "latitude",
+    id_col = "point_id"
+  )
+}
+
+# Use a Harris-named segment if it passes the configured distance threshold.
+use_harris_named_snap <-
+  !is.null(harris_named_snap) &&
+  is.finite(harris_named_snap$distance_to_road_m[1]) &&
+  harris_named_snap$distance_to_road_m[1] <= HARRIS_TURN_MAX_SNAP_M
+
+if (use_harris_named_snap) {
+  
+  harris_turn_snap <- harris_named_snap
+  
+  harris_turn_snap_method <- "Harris-named motorcar road"
+  
+} else {
+  
+  # If no suitably close Harris-named feature exists, identify the nearest
+  # retained motorcar road. This is diagnostic only; its name is documented.
+  harris_turn_snap <- snap_points_to_named_road(
+    points_df = harris_turn_input,
+    roads_sf = roads_closed_prefix,
+    lon_col = "longitude",
+    lat_col = "latitude",
+    id_col = "point_id"
+  )
+  
+  harris_turn_snap_method <- "Nearest retained motorcar road; name requires review"
+  
+  warning(
+    "Harris Trail coordinate did not snap within ",
+    HARRIS_TURN_MAX_SNAP_M,
+    " m of a Harris-named road. The nearest retained road is ",
+    harris_turn_snap$nearest_road_name[1],
+    " at ",
+    round(harris_turn_snap$distance_to_road_m[1], 1),
+    " m. Review the Harris Trail snap QA."
+  )
+}
+
+harris_turn_snap <- harris_turn_snap %>%
+  mutate(
+    snap_method = harris_turn_snap_method,
+    harris_name_match = str_detect(
+      coalesce(as.character(nearest_road_name), ""),
+      regex("Harris", ignore_case = TRUE)
+    )
+  )
+
+if (
+  !is.finite(harris_turn_snap$distance_to_road_m[1]) ||
+  harris_turn_snap$distance_to_road_m[1] > HARRIS_TURN_MAX_SNAP_M
+) {
+  stop(
+    "Harris Trail coordinate is too far from the retained motorcar network: ",
+    round(harris_turn_snap$distance_to_road_m[1], 1),
+    " m. Review Harris_Trail_Turn_Snap_QA.csv."
+  )
+}
+
+harris_turn_point_wgs84 <- st_as_sf(
+  harris_turn_snap,
+  coords = c("routing_lon", "routing_lat"),
+  crs = 4326,
+  remove = FALSE
+)
+
+write_csv(
+  harris_turn_snap,
+  file.path(OUTPUT_DIR, "Harris_Trail_Turn_Snap_QA.csv")
+)
+
+message(
+  "Harris Trail diagnostic snap: ",
+  round(harris_turn_snap$distance_to_road_m[1], 1),
+  " m; road = ",
+  harris_turn_snap$nearest_road_name[1],
+  "; method = ",
+  harris_turn_snap_method,
+  "."
+)
+
+
+# ---------------------------------------------------------------------------
+# 13C. STATION 1 SNAP TO THE FLOODED-CLOSURE NETWORK
+# ---------------------------------------------------------------------------
+
+ncfpd1_flooded_point_df <- ncfpd1_origin_row %>%
+  transmute(
+    origin_lon,
+    origin_lat
+  )
+
+ncfpd1_flooded_snapped <- snap_points_to_named_road(
+  points_df = ncfpd1_flooded_point_df,
+  roads_sf = roads_closed_prefix,
+  lon_col = "origin_lon",
+  lat_col = "origin_lat"
+)
+
+if (
+  !is.finite(ncfpd1_flooded_snapped$distance_to_road_m[1]) ||
+  ncfpd1_flooded_snapped$distance_to_road_m[1] >
+  MAX_NCFPD_ORIGIN_SNAP_M
+) {
+  stop(
+    "Station 1 failed its flooded-closure road snap validation: ",
+    round(ncfpd1_flooded_snapped$distance_to_road_m[1], 1),
+    " m."
+  )
+}
+
+
+# ---------------------------------------------------------------------------
+# 13D. SNAP ALL NORTHERN 2020 CENSUS BLOCKS TO NORTH-SIDE ROADS
+# ---------------------------------------------------------------------------
+
 yellow_block_lookup_north <- yellow_block_lookup_north %>%
-  mutate(block_geoid_2020 = as.character(block_geoid_2020))
+  mutate(
+    block_geoid_2020 = as.character(block_geoid_2020)
+  )
+
 yellow_block_lookup_north <- snap_points_to_named_road(
   points_df = yellow_block_lookup_north,
   roads_sf = roads_north_side,
@@ -1082,12 +1369,18 @@ yellow_block_lookup_north <- snap_points_to_named_road(
     )
   )
 
-# ---------------------------------------------------------------------------
-# SPECIAL BLOCK: AUDIT ROCK MOUNTAIN ROAD AND SELECT A VALID NORTH-SIDE SNAP
-# ---------------------------------------------------------------------------
+if (
+  any(!is.finite(yellow_block_lookup_north$routing_lon)) ||
+  any(!is.finite(yellow_block_lookup_north$routing_lat)) ||
+  any(!is.finite(yellow_block_lookup_north$distance_to_road_m))
+) {
+  stop("One or more northern Census blocks failed their north-side road snap.")
+}
 
-# SPECIAL_TARGET_LON/LAT identifies the census block. It is not assumed to
-# be the actual road-access coordinate for that block.
+
+# ---------------------------------------------------------------------------
+# 13E. SPECIAL BLOCK: AUDIT ROCK MOUNTAIN ROAD AND SELECT A VALID SNAP
+# ---------------------------------------------------------------------------
 
 special_target_df <- tibble(
   block_geoid_2020 = SPECIAL_TARGET_BLOCK_GEOID,
@@ -1101,9 +1394,7 @@ special_target_point_utm <- st_sfc(
 ) %>%
   st_transform(26911)
 
-# Identify the nearest Rock Mountain-named feature at each road-cleaning stage.
-# This shows whether a nearby segment was removed by the motorcar filter,
-# river-crossing audit, or north-side-only filter.
+# Audit the nearest Rock Mountain-named road at each cleaning stage.
 nearest_named_road_audit <- function(roads_sf, stage_name) {
   
   named_roads <- roads_sf %>%
@@ -1115,16 +1406,19 @@ nearest_named_road_audit <- function(roads_sf, stage_name) {
     )
   
   if (nrow(named_roads) == 0) {
-    return(tibble(
-      stage = stage_name,
-      candidate_segments = 0L,
-      nearest_distance_m = NA_real_,
-      nearest_osm_id = NA_character_,
-      nearest_road_name = NA_character_,
-      nearest_highway = NA_character_,
-      intersects_river_centerline = NA,
-      intersects_30m_river_buffer = NA
-    ))
+    
+    return(
+      tibble(
+        stage = stage_name,
+        candidate_segments = 0L,
+        nearest_distance_m = NA_real_,
+        nearest_osm_id = NA_character_,
+        nearest_road_name = NA_character_,
+        nearest_highway = NA_character_,
+        intersects_river_centerline = NA,
+        intersects_30m_river_buffer = NA
+      )
+    )
   }
   
   named_roads_utm <- st_transform(named_roads, 26911)
@@ -1166,20 +1460,22 @@ write_csv(
 
 print(special_rock_road_audit)
 
-# Retrieve the block's existing snap. This was already calculated using
-# roads_north_side, so it cannot place the destination on a removed crossing.
+# Retrieve the previously calculated snap for this block.
+# This is the default north-side-only road-access destination.
 special_block_default_snap <- yellow_block_lookup_north %>%
-  filter(block_geoid_2020 == SPECIAL_TARGET_BLOCK_GEOID)
+  filter(
+    block_geoid_2020 == SPECIAL_TARGET_BLOCK_GEOID
+  )
 
 if (nrow(special_block_default_snap) != 1) {
   stop(
-    "Could not identify exactly one existing north-side road snap for special block ",
+    "Could not identify exactly one north-side road snap for special block ",
     SPECIAL_TARGET_BLOCK_GEOID,
     "."
   )
 }
 
-# Find Rock Mountain-named features that actually remain in the north-side graph.
+# Identify Rock Mountain-named roads actually retained in the north graph.
 rock_mountain_road_segments_north <- roads_north_side %>%
   filter(
     str_detect(
@@ -1201,7 +1497,7 @@ if (nrow(rock_mountain_road_segments_north) > 0) {
   )
 }
 
-# Use the named-road snap only when it passes the original 50 m restriction.
+# Use the named-road snap only if it passes the original 50 m requirement.
 use_named_road_snap <-
   !is.null(special_named_snap) &&
   is.finite(special_named_snap$distance_to_road_m[1]) &&
@@ -1222,8 +1518,8 @@ if (use_named_road_snap) {
   
 } else {
   
-  # Do not force a 1,900 m+ connection to a distant Rock Mountain segment.
-  # Retain the block's previously calculated north-side road snap instead.
+  # Do not create an artificial long-distance connection to Rock Mountain.
+  # Retain the block's existing north-side-only road snap.
   special_snap <- special_block_default_snap
   
   special_destination_method <-
@@ -1253,31 +1549,27 @@ if (use_named_road_snap) {
   )
 }
 
-# Final checks on the selected special destination.
-if (
-  !is.finite(special_snap$distance_to_road_m[1]) ||
-  !is.finite(special_snap$routing_lon[1]) ||
-  !is.finite(special_snap$routing_lat[1])
-) {
-  stop("Special block does not have a valid north-side road snap.")
-}
+# Validate the selected destination before updating the lookup.
+special_snap_valid <-
+  nrow(special_snap) == 1 &&
+  all(
+    is.finite(
+      c(
+        special_snap$distance_to_road_m[1],
+        special_snap$routing_lon[1],
+        special_snap$routing_lat[1]
+      )
+    )
+  )
 
-special_snap_point_utm <- st_sfc(
-  st_point(c(
-    special_snap$routing_lon[1],
-    special_snap$routing_lat[1]
-  )),
-  crs = 4326
-) %>%
-  st_transform(26911)
-
-if (lengths(st_intersects(special_snap_point_utm, river_buffer_utm)) > 0) {
+if (!special_snap_valid) {
   stop(
-    "Special block routing point falls inside the river buffer. ",
-    "Do not route until the road-access location is reviewed."
+    "Special block does not have a valid north-side road snap. ",
+    "Review the special-target and block-access QA."
   )
 }
 
+# Apply the selected special destination to the Census-block lookup.
 yellow_block_lookup_north <- yellow_block_lookup_north %>%
   mutate(
     routing_lon = if_else(
@@ -1312,28 +1604,80 @@ yellow_block_lookup_north <- yellow_block_lookup_north %>%
     )
   )
 
-if (any(yellow_block_lookup_north$distance_to_road_m > MAX_BLOCK_SNAP_STOP_M, na.rm = TRUE)) {
+# Verify all block access distances against the maximum stop threshold.
+if (
+  any(
+    yellow_block_lookup_north$distance_to_road_m >
+    MAX_BLOCK_SNAP_STOP_M,
+    na.rm = TRUE
+  )
+) {
+  
   bad_blocks <- yellow_block_lookup_north %>%
-    filter(distance_to_road_m > MAX_BLOCK_SNAP_STOP_M) %>%
-    select(block_geoid_2020, distance_to_road_m, nearest_road_name)
-  write_csv(bad_blocks, file.path(OUTPUT_DIR, "Blocks_Over_Maximum_Road_Snap.csv"))
-  stop("One or more 2020 block destinations are more than ", MAX_BLOCK_SNAP_STOP_M, " m from a north-side motorcar road. Review Blocks_Over_Maximum_Road_Snap.csv.")
-}
-
-block_snap_review <- yellow_block_lookup_north %>%
-  select(block_geoid_2020, tract_geoid_2020, distance_to_road_m, nearest_road_name, nearest_road_highway, destination_method) %>%
-  arrange(desc(distance_to_road_m))
-write_csv(block_snap_review, file.path(OUTPUT_DIR, "2020_North_Block_Road_Access_Snap_Review.csv"))
-if (any(yellow_block_lookup_north$distance_to_road_m > MAX_BLOCK_SNAP_REVIEW_M, na.rm = TRUE)) {
-  warning(
-    sum(yellow_block_lookup_north$distance_to_road_m > MAX_BLOCK_SNAP_REVIEW_M, na.rm = TRUE),
-    " north-side block(s) are more than ", MAX_BLOCK_SNAP_REVIEW_M,
-    " m from the nearest north-side motorcar road. Their off-network access gap is documented, not included in modeled road distance/time."
+    filter(
+      distance_to_road_m > MAX_BLOCK_SNAP_STOP_M
+    ) %>%
+    select(
+      block_geoid_2020,
+      distance_to_road_m,
+      nearest_road_name
+    )
+  
+  write_csv(
+    bad_blocks,
+    file.path(OUTPUT_DIR, "Blocks_Over_Maximum_Road_Snap.csv")
+  )
+  
+  stop(
+    "One or more northern Census-block destinations are more than ",
+    MAX_BLOCK_SNAP_STOP_M,
+    " m from a north-side motorcar road."
   )
 }
 
-# Snap all three geocoded detour waypoints to the north-side-only motorcar
-# network. This gives prefix and north-side legs identical De Luz node coords.
+# Create the complete road-access snap review table.
+block_snap_review <- yellow_block_lookup_north %>%
+  select(
+    block_geoid_2020,
+    tract_geoid_2020,
+    distance_to_road_m,
+    nearest_road_name,
+    nearest_road_highway,
+    destination_method
+  ) %>%
+  arrange(desc(distance_to_road_m))
+
+write_csv(
+  block_snap_review,
+  file.path(OUTPUT_DIR, "2020_North_Block_Road_Access_Snap_Review.csv")
+)
+
+if (
+  any(
+    yellow_block_lookup_north$distance_to_road_m >
+    MAX_BLOCK_SNAP_REVIEW_M,
+    na.rm = TRUE
+  )
+) {
+  
+  warning(
+    sum(
+      yellow_block_lookup_north$distance_to_road_m >
+        MAX_BLOCK_SNAP_REVIEW_M,
+      na.rm = TRUE
+    ),
+    " north-side block(s) are more than ",
+    MAX_BLOCK_SNAP_REVIEW_M,
+    " m from the nearest north-side motorcar road. ",
+    "Their off-network access gaps are documented."
+  )
+}
+
+
+# ---------------------------------------------------------------------------
+# 13F. SNAP DETOUR WAYPOINTS TO THE NORTH-SIDE-ONLY NETWORK
+# ---------------------------------------------------------------------------
+
 waypoint_snap_input <- detour_waypoints_geocoded %>%
   transmute(
     stop_order,
@@ -1341,6 +1685,7 @@ waypoint_snap_input <- detour_waypoints_geocoded %>%
     longitude,
     latitude
   )
+
 detour_waypoints_snapped <- snap_points_to_named_road(
   points_df = waypoint_snap_input,
   roads_sf = roads_north_side,
@@ -1348,38 +1693,134 @@ detour_waypoints_snapped <- snap_points_to_named_road(
   lat_col = "latitude",
   id_col = "stop_name"
 )
-if (any(!is.finite(detour_waypoints_snapped$distance_to_road_m)) ||
-    any(detour_waypoints_snapped$distance_to_road_m > MAX_WAYPOINT_SNAP_M)) {
-  write_csv(detour_waypoints_snapped, file.path(OUTPUT_DIR, "Detour_Waypoint_Snap_Failures.csv"))
-  stop("One or more detour waypoints are more than ", MAX_WAYPOINT_SNAP_M, " m from the north-side road network. Review Detour_Waypoint_Snap_Failures.csv.")
-}
-write_csv(detour_waypoints_snapped, file.path(OUTPUT_DIR, "Detour_Waypoint_Road_Snaps.csv"))
 
-# Snap NCFPD Station 1 to the nearest verified vehicle road in the full graph.
-ncfpd1_point_df <- ncfpd1_origin_row %>% transmute(origin_lon, origin_lat)
+if (
+  any(!is.finite(detour_waypoints_snapped$distance_to_road_m)) ||
+  any(
+    detour_waypoints_snapped$distance_to_road_m >
+    MAX_WAYPOINT_SNAP_M
+  )
+) {
+  
+  write_csv(
+    detour_waypoints_snapped,
+    file.path(OUTPUT_DIR, "Detour_Waypoint_Snap_Failures.csv")
+  )
+  
+  stop(
+    "One or more detour waypoints are more than ",
+    MAX_WAYPOINT_SNAP_M,
+    " m from the north-side road network."
+  )
+}
+
+write_csv(
+  detour_waypoints_snapped,
+  file.path(OUTPUT_DIR, "Detour_Waypoint_Road_Snaps.csv")
+)
+
+
+# ---------------------------------------------------------------------------
+# 13G. SNAP STATION 1 TO THE NORMAL VERIFIED VEHICLE NETWORK
+# ---------------------------------------------------------------------------
+
+ncfpd1_point_df <- ncfpd1_origin_row %>%
+  transmute(
+    origin_lon,
+    origin_lat
+  )
+
 ncfpd1_snapped <- snap_points_to_named_road(
   points_df = ncfpd1_point_df,
   roads_sf = roads_normal_final,
   lon_col = "origin_lon",
-  lat_col = "origin_lat",
-  id_col = NULL
+  lat_col = "origin_lat"
 )
-if (ncfpd1_snapped$distance_to_road_m[1] > MAX_NCFPD_ORIGIN_SNAP_M) {
-  stop("NCFPD Station 1 is too far from the verified vehicle network: ", round(ncfpd1_snapped$distance_to_road_m[1], 1), " m.")
+
+if (
+  !is.finite(ncfpd1_snapped$distance_to_road_m[1]) ||
+  ncfpd1_snapped$distance_to_road_m[1] >
+  MAX_NCFPD_ORIGIN_SNAP_M
+) {
+  stop(
+    "NCFPD Station 1 is too far from the verified normal vehicle network: ",
+    round(ncfpd1_snapped$distance_to_road_m[1], 1),
+    " m."
+  )
 }
 
-# Temecula is routed entirely on the north-side graph; snap its origin there.
-temecula_point_df <- temecula_origin_row %>% transmute(origin_lon, origin_lat)
+
+# ---------------------------------------------------------------------------
+# 13H. SNAP TEMECULA TO THE NORTH-SIDE-ONLY NETWORK
+# ---------------------------------------------------------------------------
+
+temecula_point_df <- temecula_origin_row %>%
+  transmute(
+    origin_lon,
+    origin_lat
+  )
+
 temecula_snapped <- snap_points_to_named_road(
   points_df = temecula_point_df,
   roads_sf = roads_north_side,
   lon_col = "origin_lon",
-  lat_col = "origin_lat",
-  id_col = NULL
+  lat_col = "origin_lat"
 )
-if (temecula_snapped$distance_to_road_m[1] > MAX_TEMECULA_ORIGIN_SNAP_M) {
-  stop("Temecula Civic Center is too far from the north-side-only vehicle network: ", round(temecula_snapped$distance_to_road_m[1], 1), " m.")
+
+if (
+  !is.finite(temecula_snapped$distance_to_road_m[1]) ||
+  temecula_snapped$distance_to_road_m[1] >
+  MAX_TEMECULA_ORIGIN_SNAP_M
+) {
+  stop(
+    "Temecula Civic Center is too far from the north-side-only vehicle network: ",
+    round(temecula_snapped$distance_to_road_m[1], 1),
+    " m."
+  )
 }
+
+
+# ---------------------------------------------------------------------------
+# 13I. FINAL SECTION 13 QUALITY CHECKS
+# ---------------------------------------------------------------------------
+
+stopifnot(
+  nrow(yellow_block_lookup_north) > 0,
+  !anyDuplicated(yellow_block_lookup_north$block_geoid_2020),
+  all(is.finite(yellow_block_lookup_north$routing_lon)),
+  all(is.finite(yellow_block_lookup_north$routing_lat)),
+  all(is.finite(yellow_block_lookup_north$distance_to_road_m)),
+  is.finite(harris_turn_snap$routing_lon[1]),
+  is.finite(harris_turn_snap$routing_lat[1]),
+  is.finite(ncfpd1_flooded_snapped$routing_lon[1]),
+  is.finite(ncfpd1_flooded_snapped$routing_lat[1]),
+  is.finite(ncfpd1_snapped$routing_lon[1]),
+  is.finite(ncfpd1_snapped$routing_lat[1]),
+  is.finite(temecula_snapped$routing_lon[1]),
+  is.finite(temecula_snapped$routing_lat[1])
+)
+
+message("============================================================")
+message("SECTION 13 COMPLETE")
+message("Northern Census blocks snapped: ", nrow(yellow_block_lookup_north))
+message(
+  "Special block: ", SPECIAL_TARGET_BLOCK_GEOID,
+  "; road: ", special_snap$nearest_road_name[1]
+)
+message(
+  "Harris Trail snap distance: ",
+  round(harris_turn_snap$distance_to_road_m[1], 1),
+  " m"
+)
+message(
+  "Station 1 flooded-network snap distance: ",
+  round(ncfpd1_flooded_snapped$distance_to_road_m[1], 1),
+  " m"
+)
+message("All Section 13 coordinate checks passed.")
+message("============================================================")
+
+
 
 # ---------------------------------------------------------------------------
 # 14. BUILD COORDINATE MATRICES AND ROUTING GRAPHS
@@ -1457,6 +1898,7 @@ build_routing_graph <- function(roads_sf, xy, graph_label) {
     id_col = "osm_id",
     keep_cols = keep_road_cols
   )
+  
   # Crucial: insert by splitting road edges only; no off-road connector edges.
   with_nodes <- dodgr::add_nodes_to_graph(
     raw,
@@ -1465,6 +1907,68 @@ build_routing_graph <- function(roads_sf, xy, graph_label) {
   )
   capped <- cap_dodgr_speed(with_nodes)
   list(raw = raw, with_nodes = with_nodes, graph = capped)
+}
+
+# ---------------------------------------------------------------------------
+# FLOODED CLOSURE GRAPH: ONE CONTINUOUS NETWORK
+# ---------------------------------------------------------------------------
+
+# Station 1 is snapped to the closure network.
+ncfpd1_flooded_xy <- make_xy_matrix(
+  ncfpd1_flooded_snapped$routing_lon[1],
+  ncfpd1_flooded_snapped$routing_lat[1],
+  "NCFPD_STATION_1_FLOODED"
+)
+
+# Harris Trail is inserted as a diagnostic node, not a mandatory waypoint.
+harris_turn_xy <- make_xy_matrix(
+  harris_turn_snap$routing_lon[1],
+  harris_turn_snap$routing_lat[1],
+  "HARRIS_TRAIL_TURN"
+)
+
+# All existing north-side block road-access destinations are retained.
+flooded_access_nodes_xy <- rbind(
+  ncfpd1_flooded_xy,
+  harris_turn_xy,
+  block_xy_north
+)
+
+# Important:
+# roads_closed_prefix excludes the closed Sandia Creek bridge and all
+# unapproved river crossings. It retains the verified De Luz bridge.
+flooded_access_network <- build_routing_graph(
+  roads_sf = roads_closed_prefix,
+  xy = flooded_access_nodes_xy,
+  graph_label = "Flooded closure - continuous De Luz-only crossing network"
+)
+
+graph_flooded_access_speedcap <- flooded_access_network$graph
+
+# Confirm that De Luz is still the only road feature touching the river
+# centerline in this routing network.
+flooded_graph_roads_utm <- st_transform(roads_closed_prefix, 26911)
+
+flooded_graph_river_contacts <- lengths(
+  st_intersects(flooded_graph_roads_utm, river_centerline_utm)
+) > 0
+
+flooded_graph_crossing_ids <- unique(
+  as.character(
+    roads_closed_prefix$osm_id[flooded_graph_river_contacts]
+  )
+)
+
+if (!setequal(flooded_graph_crossing_ids, DE_LUZ_BRIDGE_OSM_ID)) {
+  stop(
+    "Flooded graph does not contain exactly the verified De Luz crossing. ",
+    "Found: ",
+    paste(flooded_graph_crossing_ids, collapse = ", ")
+  )
+}
+
+if (CURRENT_SANDIA_BRIDGE_OSM_ID %in% roads_closed_prefix$osm_id) {
+  stop("Closed Sandia Creek bridge unexpectedly remains in the flooded graph.")
 }
 
 # Normal network: Station 1 + all north-side block access points; both
@@ -1559,6 +2063,33 @@ names(prefix_vertex_ids) <- rownames(prefix_nodes_xy)
 north_vertex_ids <- get_graph_vertex_ids(graph_north_speedcap, north_nodes_xy)
 names(north_vertex_ids) <- rownames(north_nodes_xy)
 
+# Match all continuous flooded-closure graph nodes.
+flooded_access_vertex_ids <- get_graph_vertex_ids(
+  graph_flooded_access_speedcap,
+  flooded_access_nodes_xy
+)
+
+names(flooded_access_vertex_ids) <- rownames(flooded_access_nodes_xy)
+
+flooded_ncfpd1_id <- unname(
+  flooded_access_vertex_ids["NCFPD_STATION_1_FLOODED"]
+)
+
+flooded_harris_id <- unname(
+  flooded_access_vertex_ids["HARRIS_TRAIL_TURN"]
+)
+
+flooded_block_vertex_ids <- unname(
+  flooded_access_vertex_ids[paste0("BLOCK_", block_geoids_north)]
+)
+
+if (
+  is.na(flooded_ncfpd1_id) ||
+  is.na(flooded_harris_id) ||
+  anyNA(flooded_block_vertex_ids)
+) {
+  stop("One or more flooded-closure routing nodes could not be matched.")
+}
 normal_ncfpd1_id <- unname(normal_vertex_ids["NCFPD_STATION_1"])
 prefix_ncfpd1_id <- unname(prefix_vertex_ids["NCFPD_STATION_1"])
 prefix_de_luz_id <- unname(prefix_vertex_ids["DE_LUZ_NORTH_SIDE"])
@@ -1719,6 +2250,23 @@ detour_leg3 <- calculate_single_leg(
   "Camaron to Rock Mountain (north-side roads only)"
 )
 
+# ---------------------------------------------------------------------------
+# FLOODED CLOSURE: DIRECT FASTEST ROUTES FROM STATION 1 TO EVERY BLOCK
+# ---------------------------------------------------------------------------
+
+message(
+  "Calculating continuous flooded-closure routes from Station 1 ",
+  "to all northern 2020 Census blocks..."
+)
+
+routes_ncfpd1_deluz_north <- calculate_fastest_routes_by_vertex_id(
+  graph = graph_flooded_access_speedcap,
+  from_id = flooded_ncfpd1_id,
+  to_ids = flooded_block_vertex_ids,
+  destination_ids = paste0("BLOCK_", block_geoids_north),
+  route_label = "NCFPD Station 1 - continuous flooded closure network"
+)
+
 # Final Rock Mountain -> block routes are also north-side-only.
 detour_final_legs_north <- calculate_fastest_routes_by_vertex_id(
   graph = graph_north_speedcap,
@@ -1726,42 +2274,6 @@ detour_final_legs_north <- calculate_fastest_routes_by_vertex_id(
   to_ids = north_block_vertex_ids,
   destination_ids = paste0("BLOCK_", block_geoids_north),
   route_label = "Rock Mountain to northern 2020 blocks (north-side roads only)"
-)
-
-mandatory_detour_metrics <- bind_rows(detour_leg1, detour_leg2, detour_leg3)
-if (any(!is.finite(mandatory_detour_metrics$drive_seconds)) ||
-    any(!is.finite(mandatory_detour_metrics$distance_m))) {
-  stop("At least one mandatory detour leg is unreachable. Review waypoint snaps and graph connectivity.")
-}
-
-detour_prefix_seconds <- sum(mandatory_detour_metrics$drive_seconds)
-detour_prefix_distance_m <- sum(mandatory_detour_metrics$distance_m)
-
-routes_ncfpd1_deluz_north <- detour_final_legs_north %>%
-  mutate(
-    drive_seconds = drive_seconds + detour_prefix_seconds,
-    distance_m = distance_m + detour_prefix_distance_m,
-    route_status = if_else(
-      is.finite(drive_seconds) & is.finite(distance_m),
-      "Reachable", "Unreachable"
-    ),
-    modeled_drive_min = if_else(route_status == "Reachable", drive_seconds / 60, NA_real_),
-    modeled_distance_km = if_else(route_status == "Reachable", distance_m / 1000, NA_real_),
-    modeled_distance_mi = if_else(route_status == "Reachable", distance_m / 1609.344, NA_real_),
-    implied_average_speed_kmh = if_else(
-      route_status == "Reachable" & modeled_drive_min > 0,
-      modeled_distance_km / (modeled_drive_min / 60),
-      NA_real_
-    )
-  )
-
-write_csv(
-  mandatory_detour_metrics %>%
-    mutate(
-      modeled_drive_min = drive_seconds / 60,
-      modeled_distance_km = distance_m / 1000
-    ),
-  file.path(OUTPUT_DIR, "Mandatory_De_Luz_Detour_Legs.csv")
 )
 
 # ---------------------------------------------------------------------------
@@ -1854,9 +2366,81 @@ if (nrow(detour_coords) < 2 || any(!is.finite(detour_coords))) {
   stop("The reconstructed De Luz detour contains invalid coordinates.")
 }
 
-flooded_detour_route_north <- st_sf(
-  route_name = "Flooded Detour Route: Station 1 -> De Luz -> Camaron -> Rock Mountain",
-  geometry = st_sfc(st_linestring(detour_coords), crs = 4326)
+# ---------------------------------------------------------------------------
+# FULL FLOODED-CLOSURE DODGR ROUTES
+# ---------------------------------------------------------------------------
+
+route_lines_ncfpd1_deluz_north <- make_destination_route_lines(
+  graph = graph_flooded_access_speedcap,
+  from_id = flooded_ncfpd1_id,
+  destination_vertex_ids = flooded_block_vertex_ids,
+  destination_geoids = block_geoids_north,
+  route_results = routes_ncfpd1_deluz_north,
+  scenario_name = "NCFPD Station 1 - Flooded closure, De Luz-only crossing"
+)
+
+# ---------------------------------------------------------------------------
+# HARRIS TRAIL ROUTE PROXIMITY AUDIT
+# ---------------------------------------------------------------------------
+
+route_lines_flooded_utm <- st_transform(
+  route_lines_ncfpd1_deluz_north,
+  26911
+)
+
+harris_turn_point_utm <- st_transform(
+  harris_turn_point_wgs84,
+  26911
+)
+
+harris_route_distances <- as.numeric(
+  st_distance(
+    route_lines_flooded_utm,
+    harris_turn_point_utm
+  )
+)
+
+harris_turn_route_qa <- route_lines_ncfpd1_deluz_north %>%
+  st_drop_geometry() %>%
+  mutate(
+    distance_to_harris_turn_m = harris_route_distances,
+    passes_near_harris_turn = distance_to_harris_turn_m <= 30
+  ) %>%
+  arrange(desc(modeled_drive_min))
+
+write_csv(
+  harris_turn_route_qa,
+  file.path(OUTPUT_DIR, "Harris_Trail_Route_Proximity_QA.csv")
+)
+
+# Isolate the slowest flooded-closure destination.
+slowest_flooded_route <- route_lines_ncfpd1_deluz_north %>%
+  slice_max(modeled_drive_min, n = 1, with_ties = FALSE)
+
+slowest_route_qa <- slowest_flooded_route %>%
+  st_drop_geometry() %>%
+  mutate(
+    distance_to_harris_turn_m =
+      harris_route_distances[
+        match(
+          destination_id,
+          route_lines_ncfpd1_deluz_north$destination_id
+        )
+      ]
+  )
+
+print(slowest_route_qa)
+
+print(
+  harris_turn_route_qa %>%
+    filter(destination_id == slowest_flooded_route$destination_id) %>%
+    select(
+      destination_id,
+      modeled_drive_min,
+      modeled_distance_km,
+      distance_to_harris_turn_m,
+      passes_near_harris_turn
+    )
 )
 
 # Validate the post-De Luz linework does not intersect the river buffer.
@@ -1925,6 +2509,507 @@ detour_stop_points_wgs84 <- st_as_sf(
   remove = FALSE
 )
 
+
+
+# ---------------------------------------------------------------------------
+# 21A. RECONSTRUCT DODGR ROUTES TO EVERY NORTHERN 2020 CENSUS BLOCK
+# ---------------------------------------------------------------------------
+
+make_destination_route_lines <- function(
+    graph,
+    from_id,
+    destination_vertex_ids,
+    destination_geoids,
+    route_results,
+    scenario_name,
+    shared_prefix = NULL,
+    check_north_only = FALSE
+) {
+  
+  expected_destination_ids <- paste0("BLOCK_", destination_geoids)
+  
+  if (length(destination_vertex_ids) != length(destination_geoids)) {
+    stop("Destination vertex IDs and GEOIDs have different lengths.")
+  }
+  
+  # Only reconstruct routes that were successfully calculated.
+  reachable <- route_results %>%
+    filter(
+      route_status == "Reachable",
+      is.finite(modeled_drive_min),
+      is.finite(distance_m)
+    )
+  
+  if (nrow(reachable) == 0) {
+    stop("No reachable destinations for route-line reconstruction: ", scenario_name)
+  }
+  
+  destination_idx <- match(
+    as.character(reachable$destination_id),
+    expected_destination_ids
+  )
+  
+  if (anyNA(destination_idx)) {
+    stop("Could not match one or more route results to their block vertex IDs.")
+  }
+  
+  # Optional shared prefix, used for the flooded De Luz detour.
+  prefix_xy <- NULL
+  
+  if (!is.null(shared_prefix)) {
+    
+    prefix_xy <- as.data.frame(shared_prefix)
+    
+    if (ncol(prefix_xy) != 2) {
+      stop("Shared route prefix must contain exactly two coordinate columns.")
+    }
+    
+    names(prefix_xy) <- c("x", "y")
+    
+    if (nrow(prefix_xy) < 2 || any(!is.finite(as.matrix(prefix_xy)))) {
+      stop("Shared route prefix contains invalid coordinates.")
+    }
+  }
+  
+  route_geometries <- vector("list", nrow(reachable))
+  
+  longest_destination_id <- reachable$destination_id[
+    which.max(reachable$modeled_drive_min)
+  ]
+  
+  for (i in seq_len(nrow(reachable))) {
+    
+    destination_vertex <- destination_vertex_ids[destination_idx[i]]
+    
+    # Reconstruct the actual fastest-time route through the graph.
+    final_path <- extract_fastest_path_coordinates(
+      graph,
+      from_id,
+      destination_vertex
+    )
+    
+    if (
+      nrow(final_path) < 2 ||
+      any(!is.finite(as.matrix(final_path[, c("x", "y")])) )
+    ) {
+      stop(
+        "Invalid reconstructed path for ",
+        reachable$destination_id[i],
+        " in scenario ",
+        scenario_name
+      )
+    }
+    
+    # Attach the shared prefix when this is a staged detour scenario.
+    if (!is.null(prefix_xy)) {
+      
+      prefix_endpoint <- c(
+        tail(prefix_xy$x, 1),
+        tail(prefix_xy$y, 1)
+      )
+      
+      final_path_start <- c(
+        final_path$x[1],
+        final_path$y[1]
+      )
+      
+      handoff_distance_m <- coord_distance_m(
+        prefix_endpoint,
+        final_path_start
+      )
+      
+      if (!is.finite(handoff_distance_m) || handoff_distance_m > 2) {
+        stop(
+          "Route prefix does not join the final block route for ",
+          reachable$destination_id[i],
+          ". Handoff distance: ",
+          round(handoff_distance_m, 2),
+          " m."
+        )
+      }
+      
+      route_xy <- bind_rows(
+        prefix_xy,
+        final_path %>% slice(-1)
+      )
+      
+      # For the flooded scenario, verify that everything after De Luz
+      # remains on the north-side-only network.
+      if (check_north_only) {
+        
+        north_only_xy <- bind_rows(
+          path_leg2,
+          path_leg3 %>% slice(-1),
+          final_path %>% slice(-1)
+        )
+        
+        north_only_geometry <- st_sfc(
+          st_linestring(as.matrix(north_only_xy)),
+          crs = 4326
+        ) %>%
+          st_transform(26911)
+        
+        if (lengths(st_intersects(
+          north_only_geometry,
+          river_buffer_utm
+        )) > 0) {
+          stop(
+            "Post-De Luz route to ",
+            reachable$destination_id[i],
+            " intersects the river buffer. Do not use this route."
+          )
+        }
+      }
+      
+    } else {
+      
+      route_xy <- final_path
+    }
+    
+    if (nrow(route_xy) < 2) {
+      stop("Route contains fewer than two coordinates.")
+    }
+    
+    route_geometries[[i]] <- st_linestring(
+      as.matrix(route_xy %>% select(x, y))
+    )
+  }
+  
+  route_metadata <- reachable %>%
+    mutate(
+      block_geoid_2020 = str_remove(destination_id, "^BLOCK_"),
+      scenario = scenario_name,
+      is_longest_route = destination_id == longest_destination_id
+    )
+  
+  st_sf(
+    route_metadata,
+    geometry = st_sfc(route_geometries, crs = 4326)
+  )
+}
+
+
+# ---------------------------------------------------------------------------
+# RECONSTRUCT THE THREE SCENARIOS
+# ---------------------------------------------------------------------------
+
+# Scenario 1: NCFPD Station 1 normal access.
+route_lines_ncfpd1_normal_north <- make_destination_route_lines(
+  graph = graph_normal_speedcap,
+  from_id = normal_ncfpd1_id,
+  destination_vertex_ids = normal_block_ids,
+  destination_geoids = block_geoids_north,
+  route_results = routes_ncfpd1_normal_north,
+  scenario_name = "NCFPD Station 1 - Normal Access"
+)
+
+
+# Scenario 2: NCFPD Station 1 flooded De Luz detour.
+#
+# The shared prefix contains:
+# Station 1 -> De Luz -> Camaron -> Rock Mountain.
+#
+# Each individual destination route then extends from Rock Mountain
+# to its own north-side Census block.
+route_lines_ncfpd1_deluz_north <- make_destination_route_lines(
+  graph = graph_north_speedcap,
+  from_id = north_rock_id,
+  destination_vertex_ids = north_block_vertex_ids,
+  destination_geoids = block_geoids_north,
+  route_results = routes_ncfpd1_deluz_north,
+  scenario_name = "NCFPD Station 1 - Flooded De Luz Detour",
+  shared_prefix = detour_coords,
+  check_north_only = TRUE
+)
+
+
+# Scenario 3: Temecula Civic Center during bridge closure.
+route_lines_temecula_north <- make_destination_route_lines(
+  graph = graph_north_speedcap,
+  from_id = north_temecula_id,
+  destination_vertex_ids = north_block_vertex_ids,
+  destination_geoids = block_geoids_north,
+  route_results = routes_temecula_north,
+  scenario_name = "Temecula - Bridge Closure"
+)
+
+
+message(
+  "Reconstructed route geometries: ",
+  nrow(route_lines_ncfpd1_normal_north), " normal; ",
+  nrow(route_lines_ncfpd1_deluz_north), " flooded detour; ",
+  nrow(route_lines_temecula_north), " Temecula."
+)
+
+#############
+
+# 21A troubleshooting the troubled block (the one west of sandia creek drive)
+
+############
+# ---------------------------------------------------------------------------
+# ISOLATE THE PURPLE (LONGEST) ROUTE AND TEST FOR FORCED BACKTRACKING
+# ---------------------------------------------------------------------------
+
+# Identify the destination represented by the purple line.
+suspect_route <- route_lines_ncfpd1_deluz_north %>%
+  filter(is_longest_route)
+
+if (nrow(suspect_route) != 1) {
+  stop("Expected exactly one purple-highlighted longest route.")
+}
+
+suspect_block_geoid <- as.character(
+  suspect_route$block_geoid_2020[1]
+)
+
+suspect_block_index <- match(
+  suspect_block_geoid,
+  block_geoids_north
+)
+
+if (is.na(suspect_block_index)) {
+  stop("Could not match the suspect block to its north-side graph vertex.")
+}
+
+suspect_vertex_id <- north_block_vertex_ids[suspect_block_index]
+
+message("Suspect 2020 Census block: ", suspect_block_geoid)
+
+# Retrieve the current modeled result.
+suspect_current_result <- routes_ncfpd1_deluz_north %>%
+  filter(destination_id == paste0("BLOCK_", suspect_block_geoid))
+
+# Retrieve its current Rock Mountain -> block final leg.
+suspect_current_final_leg <- detour_final_legs_north %>%
+  filter(destination_id == paste0("BLOCK_", suspect_block_geoid))
+
+if (nrow(suspect_current_result) != 1 ||
+    nrow(suspect_current_final_leg) != 1) {
+  stop("Could not uniquely retrieve the current route and final leg.")
+}
+
+# ---------------------------------------------------------------------------
+# ALTERNATIVE: STATION 1 -> DE LUZ -> BLOCK
+# ---------------------------------------------------------------------------
+
+# Calculate the fastest north-side-only route from De Luz to every block.
+# This does not force vehicles to continue to Camaron or Rock Mountain.
+detour_from_deluz_all_blocks <- calculate_fastest_routes_by_vertex_id(
+  graph = graph_north_speedcap,
+  from_id = north_de_luz_id,
+  to_ids = north_block_vertex_ids,
+  destination_ids = paste0("BLOCK_", block_geoids_north),
+  route_label = "De Luz directly to northern 2020 Census blocks"
+)
+
+suspect_alternative_final_leg <- detour_from_deluz_all_blocks %>%
+  filter(destination_id == paste0("BLOCK_", suspect_block_geoid))
+
+if (nrow(suspect_alternative_final_leg) != 1) {
+  stop("Could not retrieve the alternative De Luz-to-block route.")
+}
+
+# The Station 1 -> De Luz crossing leg is retained in both strategies.
+de_luz_prefix_seconds <- detour_leg1$drive_seconds[1]
+de_luz_prefix_distance_m <- detour_leg1$distance_m[1]
+
+suspect_route_comparison <- tibble(
+  block_geoid_2020 = suspect_block_geoid,
+  
+  route_strategy = c(
+    "Current: De Luz -> Camaron -> Rock Mountain -> block",
+    "Alternative: De Luz -> fastest north-side route -> block"
+  ),
+  
+  modeled_drive_min = c(
+    suspect_current_result$modeled_drive_min[1],
+    (de_luz_prefix_seconds +
+       suspect_alternative_final_leg$drive_seconds[1]) / 60
+  ),
+  
+  modeled_distance_km = c(
+    suspect_current_result$modeled_distance_km[1],
+    (de_luz_prefix_distance_m +
+       suspect_alternative_final_leg$distance_m[1]) / 1000
+  )
+)
+
+print(suspect_route_comparison)
+
+#21 alternate routing test
+
+# ---------------------------------------------------------------------------
+# RECONSTRUCT BOTH COMPLETE ROUTES TO THE SUSPECT BLOCK
+# ---------------------------------------------------------------------------
+
+# Current route: Station 1 -> De Luz -> Camaron -> Rock Mountain -> block.
+current_final_path <- extract_fastest_path_coordinates(
+  graph_north_speedcap,
+  north_rock_id,
+  suspect_vertex_id
+)
+
+detour_prefix_df <- tibble(
+  x = detour_coords[, 1],
+  y = detour_coords[, 2]
+)
+
+current_full_route_xy <- bind_rows(
+  detour_prefix_df,
+  current_final_path %>% slice(-1)
+)
+
+# Alternative: Station 1 -> De Luz -> fastest north-side route -> block.
+alternative_final_path <- extract_fastest_path_coordinates(
+  graph_north_speedcap,
+  north_de_luz_id,
+  suspect_vertex_id
+)
+
+# Verify that the prefix and alternative final leg join.
+alternative_handoff_m <- coord_distance_m(
+  c(tail(path_leg1$x, 1), tail(path_leg1$y, 1)),
+  c(alternative_final_path$x[1], alternative_final_path$y[1])
+)
+
+if (alternative_handoff_m > 2) {
+  stop("Alternative route does not connect properly at the De Luz handoff.")
+}
+
+alternative_full_route_xy <- bind_rows(
+  path_leg1,
+  alternative_final_path %>% slice(-1)
+)
+
+# Verify the alternative north-side final leg avoids the river buffer.
+alternative_final_utm <- st_sfc(
+  st_linestring(as.matrix(alternative_final_path)),
+  crs = 4326
+) %>%
+  st_transform(26911)
+
+if (lengths(st_intersects(alternative_final_utm, river_buffer_utm)) > 0) {
+  stop("Alternative De Luz-to-block route intersects the river buffer.")
+}
+
+# Create a two-feature route layer.
+suspect_route_comparison_sf <- st_sf(
+  route_strategy = c(
+    "Current: mandatory Rock Mountain waypoint",
+    "Alternative: direct north-side routing after De Luz"
+  ),
+  
+  block_geoid_2020 = suspect_block_geoid,
+  
+  geometry = st_sfc(
+    st_linestring(as.matrix(current_full_route_xy)),
+    st_linestring(as.matrix(alternative_full_route_xy)),
+    crs = 4326
+  )
+)
+
+# Highlight the destination block.
+suspect_block_geom <- yellow_blocks_map_base_north %>%
+  filter(block_geoid_2020 == suspect_block_geoid)
+
+if (nrow(suspect_block_geom) != 1) {
+  stop("Could not identify exactly one suspect Census block polygon.")
+}
+
+# Plot all road context and both complete routes.
+suspect_route_map <- ggplot() +
+  
+  geom_sf(
+    data = roads_normal_final %>% st_transform(4326),
+    color = "grey78",
+    linewidth = 0.25
+  ) +
+  
+  geom_sf(
+    data = river_map_wgs84,
+    color = "deepskyblue3",
+    linewidth = 1.0
+  ) +
+  
+  geom_sf(
+    data = yellow_blocks_map_base_north,
+    fill = NA,
+    color = "grey65",
+    linewidth = 0.2
+  ) +
+  
+  geom_sf(
+    data = suspect_block_geom,
+    fill = "#F5E65B",
+    color = "black",
+    linewidth = 0.9
+  ) +
+  
+  geom_sf(
+    data = suspect_route_comparison_sf,
+    aes(color = route_strategy),
+    linewidth = 1.15,
+    alpha = 0.95
+  ) +
+  
+  geom_sf(
+    data = detour_stop_points_wgs84,
+    color = "black",
+    fill = "white",
+    shape = 21,
+    size = 2.5
+  ) +
+  
+  scale_color_manual(
+    values = c(
+      "Current: mandatory Rock Mountain waypoint" = "#7B1FA2",
+      "Alternative: direct north-side routing after De Luz" = "#0072B2"
+    )
+  ) +
+  
+  coord_sf(
+    crs = st_crs(4326),
+    default_crs = st_crs(4326),
+    xlim = unname(c(
+      MAP_EXTENT_WGS84["xmin"],
+      MAP_EXTENT_WGS84["xmax"]
+    )),
+    ylim = unname(c(
+      MAP_EXTENT_WGS84["ymin"],
+      MAP_EXTENT_WGS84["ymax"]
+    )),
+    expand = FALSE
+  ) +
+  
+  labs(
+    title = "Full Route Comparison - Suspect 2020 Census Block",
+    subtitle = paste("Block GEOID:", suspect_block_geoid),
+    color = "Routing strategy",
+    x = "Longitude",
+    y = "Latitude"
+  ) +
+  
+  theme_bw() +
+  
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "bottom"
+  )
+
+print(suspect_route_map)
+
+ggsave(
+  file.path(OUTPUT_DIR, "Suspect_Block_Full_Route_Comparison.png"),
+  suspect_route_map,
+  width = 13,
+  height = 10,
+  dpi = 300
+)
+
+write_csv(
+  suspect_route_comparison,
+  file.path(OUTPUT_DIR, "Suspect_Block_Route_Comparison.csv")
+)
 # ---------------------------------------------------------------------------
 # 22. ASSEMBLE NORTHERN 2020 BLOCK TIME/DISTANCE TABLES
 # ---------------------------------------------------------------------------
@@ -2171,7 +3256,8 @@ make_north_gradient_map <- function(
     map_title,
     active_origin_name,
     metric = c("time", "distance"),
-    show_detour = FALSE
+    show_detour = FALSE,
+    route_lines = NULL
 ) {
   metric <- match.arg(metric)
   if (metric == "time") {
@@ -2314,7 +3400,38 @@ make_north_gradient_map <- function(
       panel.grid = element_line(color = "grey90"),
       legend.position = "right"
     )
-  
+  # Overlay actual dodgr fastest-time paths to individual block destinations.
+  if (!is.null(route_lines) && nrow(route_lines) > 0) {
+    
+    # All modeled routes: thin, partially transparent charcoal lines.
+    p <- p +
+      geom_sf(
+        data = route_lines,
+        color = "grey15",
+        linewidth = 0.30,
+        alpha = 0.30,
+        inherit.aes = FALSE
+      ) +
+      
+      # Highlight the destination with the longest modeled drive time.
+      geom_sf(
+        data = route_lines %>% filter(is_longest_route),
+        color = "#7B1FA2",
+        linewidth = 1.05,
+        alpha = 1,
+        inherit.aes = FALSE
+      ) +
+      
+      # Re-draw the active origin so it remains visible over the routes.
+      geom_sf(
+        data = active_origin,
+        color = "black",
+        shape = 8,
+        size = 5.2,
+        stroke = 1.5,
+        inherit.aes = FALSE
+      )
+  }
   if (show_detour) {
     p <- p +
       geom_sf(
@@ -2346,26 +3463,14 @@ make_north_gradient_map <- function(
 # 26. GENERATE THREE TIME MAPS AND THREE DISTANCE MAPS
 # ---------------------------------------------------------------------------
 
+# NCFPD Station 1 - Normal
 map_north_ncfpd1_normal_time <- make_north_gradient_map(
   map_data_ncfpd1_normal_north,
   "NCFPD Station 1 - Normal Access",
   "NCFPD Station 1",
   metric = "time",
-  show_detour = FALSE
-)
-map_north_ncfpd1_deluz_time <- make_north_gradient_map(
-  map_data_ncfpd1_deluz_north,
-  "NCFPD Station 1 - Flooded De Luz Detour",
-  "NCFPD Station 1",
-  metric = "time",
-  show_detour = TRUE
-)
-map_north_temecula_time <- make_north_gradient_map(
-  map_data_temecula_north,
-  "Temecula Civic Center - Bridge Closure",
-  "Temecula Civic Center",
-  metric = "time",
-  show_detour = FALSE
+  show_detour = FALSE,
+  route_lines = route_lines_ncfpd1_normal_north
 )
 
 map_north_ncfpd1_normal_distance <- make_north_gradient_map(
@@ -2373,21 +3478,48 @@ map_north_ncfpd1_normal_distance <- make_north_gradient_map(
   "NCFPD Station 1 - Normal Access Distance",
   "NCFPD Station 1",
   metric = "distance",
-  show_detour = FALSE
+  show_detour = FALSE,
+  route_lines = route_lines_ncfpd1_normal_north
 )
+
+
+# NCFPD Station 1 - Flooded De Luz detour
+map_north_ncfpd1_deluz_time <- make_north_gradient_map(
+  map_data_ncfpd1_deluz_north,
+  "NCFPD Station 1 - Flooded De Luz Detour",
+  "NCFPD Station 1",
+  metric = "time",
+  show_detour = TRUE,
+  route_lines = route_lines_ncfpd1_deluz_north
+)
+
 map_north_ncfpd1_deluz_distance <- make_north_gradient_map(
   map_data_ncfpd1_deluz_north,
   "NCFPD Station 1 - Flooded De Luz Detour Distance",
   "NCFPD Station 1",
   metric = "distance",
-  show_detour = TRUE
+  show_detour = TRUE,
+  route_lines = route_lines_ncfpd1_deluz_north
 )
+
+
+# Temecula Civic Center - Bridge closure
+map_north_temecula_time <- make_north_gradient_map(
+  map_data_temecula_north,
+  "Temecula Civic Center - Bridge Closure",
+  "Temecula Civic Center",
+  metric = "time",
+  show_detour = FALSE,
+  route_lines = route_lines_temecula_north
+)
+
 map_north_temecula_distance <- make_north_gradient_map(
   map_data_temecula_north,
   "Temecula Civic Center - Bridge Closure Distance",
   "Temecula Civic Center",
   metric = "distance",
-  show_detour = FALSE
+  show_detour = FALSE,
+  route_lines = route_lines_temecula_north
 )
 
 print(map_north_ncfpd1_normal_time)
@@ -2436,6 +3568,37 @@ if (file.exists(map_gpkg)) file.remove(map_gpkg)
 st_write(map_data_ncfpd1_normal_north, map_gpkg, layer = "NCFPD1_Normal", quiet = TRUE)
 st_write(map_data_ncfpd1_deluz_north, map_gpkg, layer = "NCFPD1_Flooded_Detour", append = TRUE, quiet = TRUE)
 st_write(map_data_temecula_north, map_gpkg, layer = "Temecula_Bridge_Closure", append = TRUE, quiet = TRUE)
+st_write(
+  route_lines_ncfpd1_normal_north,
+  map_gpkg,
+  layer = "NCFPD1_Normal_Route_Lines",
+  append = TRUE,
+  quiet = TRUE
+)
+
+st_write(
+  route_lines_ncfpd1_deluz_north,
+  map_gpkg,
+  layer = "NCFPD1_Flooded_Detour_Route_Lines",
+  append = TRUE,
+  quiet = TRUE
+)
+
+st_write(
+  route_lines_temecula_north,
+  map_gpkg,
+  layer = "Temecula_Closure_Route_Lines",
+  append = TRUE,
+  quiet = TRUE
+)
+
+st_write(
+  route_lines_ncfpd1_deluz_north,
+  map_gpkg,
+  layer = "NCFPD1_Flooded_Closure_Full_Routes",
+  append = TRUE,
+  quiet = TRUE
+)
 
 saveRDS(
   list(
@@ -2459,11 +3622,44 @@ saveRDS(
     comparison = ncfpd1_travel_time_comparison_north,
     scenario_summary = scenario_summary_north,
     speed_validation = route_speed_validation_north,
-    map_objects = map_objects
+    map_objects = map_objects,
+    graph_flooded_access_speedcap = graph_flooded_access_speedcap,
+    flooded_access_network = flooded_access_network,
+    route_lines_flooded_closure = route_lines_ncfpd1_deluz_north,
+    harris_turn_snap = harris_turn_snap,
   ),
   file.path(OUTPUT_DIR, "Sandia_Creek_2020_NorthOnly_Master_Results.rds")
 )
 
+#LONGEST ROUTE TABLES:
+# Identify the highest modeled drive-time destination in each scenario.
+longest_route_qa <- bind_rows(
+  route_lines_ncfpd1_normal_north %>%
+    st_drop_geometry() %>%
+    filter(is_longest_route),
+  
+  route_lines_ncfpd1_deluz_north %>%
+    st_drop_geometry() %>%
+    filter(is_longest_route),
+  
+  route_lines_temecula_north %>%
+    st_drop_geometry() %>%
+    filter(is_longest_route)
+) %>%
+  select(
+    scenario,
+    block_geoid_2020,
+    modeled_drive_min,
+    modeled_distance_km,
+    implied_average_speed_kmh
+  )
+
+write_csv(
+  longest_route_qa,
+  file.path(OUTPUT_DIR, "Longest_Dodgr_Route_By_Scenario.csv")
+)
+
+print(longest_route_qa)
 message("============================================================")
 message("2020 NORTH-ONLY MASTER ANALYSIS COMPLETE")
 message("2020 north-side Census blocks routed: ", nrow(yellow_block_lookup_north))
