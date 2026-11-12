@@ -1,0 +1,1102 @@
+#packages
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(dbplyr)
+library(janitor)
+library(here)
+library(ggrepel)
+library(scales)
+library(lubridate)
+library(dbplyr)
+library(patchwork)
+library(data.table)
+library(ggnewscale)
+library(readr)
+library(stringr)
+library(tidygeocoder)
+library(stringr)
+library(dplyr)
+library(purrr)
+
+#You need to bring in these files from the google drive
+Flood_summary_11044300_new <- read_csv("data/Flood_summary_11044300_new.csv")
+Incidents_2014 <- read_csv("data/relaventincident2014.csv")
+Incidents_2015 <- read_csv("data/relaventincident2015.csv")
+Incidents_2016 <- read_csv("data/relaventincident2016.csv")
+Incidents_2017 <- read_csv("data/Incidents2017.csv")
+Incidents_2018 <- read_csv("data/incidents2018.csv")
+Incidents_2019 <- read_csv("data/Incidents2019.csv")
+Incidents_2020 <- read_csv("data/Incidents2020.csv")
+Incidents_2021 <- read_csv("data/Incidents2021.csv")
+Incidents_2022 <- read_csv("data/Incident2022.csv")
+Incidents_2023 <- read_csv("data/Incidents2023.csv")
+Incidents_2024 <- read_csv("data/Incidents2024.csv")
+Incidents_2025<-read_csv("data/Incidents2025.csv")
+
+Flood_summary_11044300_new <- read_csv("data/Flood_summary_11044300_new.csv")
+Incidents_2014 <- read_csv("data/relaventincident2014.csv")
+Incidents_2015 <- read_csv("data/relaventincident2015.csv")
+Incidents_2016 <- read_csv("data/relaventincident2016.csv")
+Incidents_2017 <- read_csv("data/Incidents2017.csv")
+Incidents_2018 <- read_csv("data/incidents2018.csv")
+Incidents_2019 <- read_csv("data/Incidents2019.csv")
+Incidents_2020 <- read_csv("data/Incidents2020.csv")
+Incidents_2021 <- read_csv("data/Incidents2021.csv")
+Incidents_2022 <- read_csv("data/Incident2022.csv")
+Incidents_2023 <- read_csv("data/Incidents2023.csv")
+Incidents_2024 <- read_csv("data/Incidents2024.csv")
+Incidents_2025<-read_csv("data/Incidents2025.csv")
+
+# although every year is together, only 2014-2018 were analyzed due to collumn construction
+#now combine clean them up so the can be joined with the flood summary dataset
+
+Incidents_2014_fixed <- Incidents_2014 %>%
+  clean_names()%>%
+  mutate(incident_date = as.Date(
+    as.character(inc_date),
+    format = "%m%d%Y"
+  ),
+  alarm_datetime = as.POSIXct(
+    as.character(alarm),
+    format = "%m%d%Y%H%M",
+    tz = "America/Los_Angeles"
+  ),
+arrival_datetime = as.POSIXct(
+  as.character(arrival),
+  format = "%m%d%Y%H%M",
+  tz = "America/Los_Angeles"
+),
+incident_date_formatted = format(
+  incident_date, "%Y-%d-%m"
+),
+alarm_time = format(alarm_datetime, "%H:%M"),
+arrival_time = format(arrival_datetime, "%H:%M")
+)%>%
+  select(fdid,version,dept_sta, inc_type, act_tak1:act_tak3, sup_app:oth_per,
+         status:match_addr, streetname, x_street, alarm_datetime,
+         arrival_datetime)
+
+Incidents_2015_fixed <- Incidents_2015 %>%
+  clean_names()%>%
+  mutate(incident_date = as.Date(
+    as.character(inc_date),
+    format = "%m%d%Y"
+  ),
+  alarm_datetime = as.POSIXct(
+    as.character(alarm),
+    format = "%m%d%Y%H%M",
+    tz = "America/Los_Angeles"
+  ),
+  arrival_datetime = as.POSIXct(
+    as.character(arrival),
+    format = "%m%d%Y%H%M",
+    tz = "America/Los_Angeles"
+  ),
+  incident_date_formatted = format(
+    incident_date, "%Y-%d-%m"
+  ),
+  alarm_time = format(alarm_datetime, "%H:%M"),
+  arrival_time = format(arrival_datetime, "%H:%M")
+  )%>%
+  select(fdid,version,dept_sta, inc_type, act_tak1:act_tak3, sup_app:oth_per,
+         status:match_addr, streetname, x_street, alarm_datetime,
+         arrival_datetime)
+
+Incidents_2016_fixed <- Incidents_2016 %>%
+  clean_names()%>%
+  mutate(incident_date = as.Date(
+    as.character(inc_date),
+    format = "%m%d%Y"
+  ),
+  alarm_datetime = as.POSIXct(
+    as.character(alarm),
+    format = "%m%d%Y%H%M",
+    tz = "America/Los_Angeles"
+  ),
+  arrival_datetime = as.POSIXct(
+    as.character(arrival),
+    format = "%m%d%Y%H%M",
+    tz = "America/Los_Angeles"
+  ),
+  incident_date_formatted = format(
+    incident_date, "%Y-%d-%m"
+  ),
+  alarm_time = format(alarm_datetime, "%H:%M"),
+  arrival_time = format(arrival_datetime, "%H:%M")
+  )%>%
+  select(fdid,version,dept_sta, inc_type, act_tak1:act_tak3, sup_app:oth_per,
+         status:match_addr, streetname, x_street, alarm_datetime,
+         arrival_datetime)
+
+Incidents_2017_fixed <- Incidents_2017 %>%
+  clean_names()%>%
+  mutate(incident_date = as.Date(
+    as.character(inc_date),
+    format = "%m%d%Y"
+  ),
+  alarm_datetime = as.POSIXct(
+    as.character(alarm),
+    format = "%m%d%Y%H%M",
+    tz = "America/Los_Angeles"
+  ),
+  arrival_datetime = as.POSIXct(
+    as.character(arrival),
+    format = "%m%d%Y%H%M",
+    tz = "America/Los_Angeles"
+  ),
+  incident_date_formatted = format(
+    incident_date, "%Y-%d-%m"
+  ),
+  alarm_time = format(alarm_datetime, "%H:%M"),
+  arrival_time = format(arrival_datetime, "%H:%M")
+  )%>%
+  select(fdid,version,dept_sta, inc_type, act_tak1:act_tak3, sup_app:oth_per,
+         status:match_addr, streetname, x_street, alarm_datetime,
+         arrival_datetime)
+
+Incidents_2018_fixed <- Incidents_2018 %>%
+  clean_names()%>%
+  mutate(incident_date = as.Date(
+    as.character(inc_date),
+    format = "%m%d%Y"
+  ),
+  alarm_datetime = as.POSIXct(
+    as.character(alarm),
+    format = "%m%d%Y%H%M",
+    tz = "America/Los_Angeles"
+  ),
+  arrival_datetime = as.POSIXct(
+    as.character(arrival),
+    format = "%m%d%Y%H%M",
+    tz = "America/Los_Angeles"
+  ),
+  incident_date_formatted = format(
+    incident_date, "%Y-%d-%m"
+  ),
+  alarm_time = format(alarm_datetime, "%H:%M"),
+  arrival_time = format(arrival_datetime, "%H:%M")
+  )%>%
+  select(fdid,version,dept_sta, inc_type, act_tak1:act_tak3, sup_app:oth_per,
+         status:match_addr, streetname, x_street, alarm_datetime,
+         arrival_datetime)
+
+Incidents_2019_fixed <- Incidents_2019 %>%
+  clean_names() %>%
+  mutate(
+    incident_datetime = parse_date_time(
+      as.character(inc_date),
+      orders = c("mdY HMS", "mdY HM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    alarm_datetime = parse_date_time(
+      as.character(alarm),
+      orders = c("mdY HMS", "mdY HM", "mdYHM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    arrival_datetime = parse_date_time(
+      as.character(arrival),
+      orders = c("mdY HMS", "mdY HM", "mdYHM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    incident_date = as.Date(incident_datetime),
+    
+    incident_date_formatted = format(
+      incident_date, "%Y-%d-%m"
+    ),
+    
+    alarm_time = format(alarm_datetime, "%H:%M"),
+    arrival_time = format(arrival_datetime, "%H:%M")
+  ) %>%
+  select(
+    fdid, streetname, inc_type, aid,
+    act_tak1:act_tak3,
+    sup_app:oth_per,
+    score, match_addr,
+    incident_date, incident_date_formatted,
+    alarm_datetime, alarm_time,
+    arrival_datetime, arrival_time
+  )
+
+
+
+Incidents_2020_fixed <- Incidents_2020  %>%
+  clean_names() %>%
+  mutate(
+    incident_datetime = parse_date_time(
+      as.character(inc_date),
+      orders = c("mdY HMS", "mdY HM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    alarm_datetime = parse_date_time(
+      as.character(alarm),
+      orders = c("mdY HMS", "mdY HM", "mdYHM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    arrival_datetime = parse_date_time(
+      as.character(arrival),
+      orders = c("mdY HMS", "mdY HM", "mdYHM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    incident_date = as.Date(incident_datetime),
+    
+    incident_date_formatted = format(
+      incident_date, "%Y-%d-%m"
+    ),
+    
+    alarm_time = format(alarm_datetime, "%H:%M"),
+    arrival_time = format(arrival_datetime, "%H:%M")
+  ) %>%
+  select(
+    fdid, streetname, inc_type, aid,
+    act_tak1:act_tak3,
+    sup_app:oth_per,
+    score, match_addr,
+    incident_date, incident_date_formatted,
+    alarm_datetime, alarm_time,
+    arrival_datetime, arrival_time
+  )
+
+
+Incidents_2021_fixed <- Incidents_2021  %>%
+  clean_names() %>%
+  mutate(
+    incident_datetime = parse_date_time(
+      as.character(inc_date),
+      orders = c("mdY HMS", "mdY HM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    alarm_datetime = parse_date_time(
+      as.character(alarm),
+      orders = c("mdY HMS", "mdY HM", "mdYHM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    arrival_datetime = parse_date_time(
+      as.character(arrival),
+      orders = c("mdY HMS", "mdY HM", "mdYHM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    incident_date = as.Date(incident_datetime),
+    
+    incident_date_formatted = format(
+      incident_date, "%Y-%d-%m"
+    ),
+    
+    alarm_time = format(alarm_datetime, "%H:%M"),
+    arrival_time = format(arrival_datetime, "%H:%M")
+  ) %>%
+  select(
+    fdid, streetname, inc_type, aid,
+    act_tak1:act_tak3,
+    sup_app:oth_per,
+    score, match_addr,
+    incident_date, incident_date_formatted,
+    alarm_datetime, alarm_time,
+    arrival_datetime, arrival_time
+  )
+
+
+Incidents_2022_fixed <- Incidents_2022  %>%
+  clean_names() %>%
+  mutate(
+    incident_datetime = parse_date_time(
+      as.character(inc_date),
+      orders = c("mdY HMS", "mdY HM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    alarm_datetime = parse_date_time(
+      as.character(alarm),
+      orders = c("mdY HMS", "mdY HM", "mdYHM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    arrival_datetime = parse_date_time(
+      as.character(arrival),
+      orders = c("mdY HMS", "mdY HM", "mdYHM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    incident_date = as.Date(incident_datetime),
+    
+    incident_date_formatted = format(
+      incident_date, "%Y-%d-%m"
+    ),
+    
+    alarm_time = format(alarm_datetime, "%H:%M"),
+    arrival_time = format(arrival_datetime, "%H:%M")
+  ) %>%
+  select(
+    fdid, streetname, inc_type, aid,
+    act_tak1:act_tak3,
+    sup_app:oth_per,
+    score, match_addr,
+    incident_date, incident_date_formatted,
+    alarm_datetime, alarm_time,
+    arrival_datetime, arrival_time
+  )
+
+Incidents_2023_fixed <- Incidents_2023 %>%
+  clean_names() %>%
+  mutate(
+    incident_datetime = parse_date_time(
+      as.character(inc_date),
+      orders = c("mdY HMS", "mdY HM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    alarm_datetime = parse_date_time(
+      as.character(alarm),
+      orders = c("mdY HMS", "mdY HM", "mdYHM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    arrival_datetime = parse_date_time(
+      as.character(arrival),
+      orders = c("mdY HMS", "mdY HM", "mdYHM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    incident_date = as.Date(incident_datetime),
+    
+    incident_date_formatted = format(
+      incident_date, "%Y-%d-%m"
+    ),
+    
+    alarm_time = format(alarm_datetime, "%H:%M"),
+    arrival_time = format(arrival_datetime, "%H:%M")
+  ) %>%
+  select(
+    fdid, streetname, inc_type, aid,
+    act_tak1:act_tak3,
+    sup_app:oth_per,
+    score, match_addr,
+    incident_date, incident_date_formatted,
+    alarm_datetime, alarm_time,
+    arrival_datetime, arrival_time
+  )
+
+
+Incidents_2024_fixed <- Incidents_2024  %>%
+  clean_names() %>%
+  mutate(
+    incident_datetime = parse_date_time(
+      as.character(inc_date),
+      orders = c("mdY HMS", "mdY HM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    alarm_datetime = parse_date_time(
+      as.character(alarm),
+      orders = c("mdY HMS", "mdY HM", "mdYHM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    arrival_datetime = parse_date_time(
+      as.character(arrival),
+      orders = c("mdY HMS", "mdY HM", "mdYHM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    incident_date = as.Date(incident_datetime),
+    
+    incident_date_formatted = format(
+      incident_date, "%Y-%d-%m"
+    ),
+    
+    alarm_time = format(alarm_datetime, "%H:%M"),
+    arrival_time = format(arrival_datetime, "%H:%M")
+  ) %>%
+  select(
+    fdid, streetname, inc_type, aid,
+    act_tak1:act_tak3,
+    sup_app:oth_per,
+    score, match_addr,
+    incident_date, incident_date_formatted,
+    alarm_datetime, alarm_time,
+    arrival_datetime, arrival_time
+  )
+
+
+Incidents_2025_fixed <- Incidents_2025  %>%
+  clean_names() %>%
+  mutate(
+    incident_datetime = parse_date_time(
+      as.character(inc_date),
+      orders = c("mdY HMS", "mdY HM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    alarm_datetime = parse_date_time(
+      as.character(alarm),
+      orders = c("mdY HMS", "mdY HM", "mdYHM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    arrival_datetime = parse_date_time(
+      as.character(arrival),
+      orders = c("mdY HMS", "mdY HM", "mdYHM", "mdY"),
+      tz = "America/Los_Angeles",
+      quiet = TRUE
+    ),
+    
+    incident_date = as.Date(incident_datetime),
+    
+    incident_date_formatted = format(
+      incident_date, "%Y-%d-%m"
+    ),
+    
+    alarm_time = format(alarm_datetime, "%H:%M"),
+    arrival_time = format(arrival_datetime, "%H:%M")
+  ) %>%
+  select(
+    fdid, streetname, inc_type, aid,
+    act_tak1:act_tak3,
+    sup_app:oth_per,
+    score, match_addr,
+    incident_date, incident_date_formatted,
+    alarm_datetime, alarm_time,
+    arrival_datetime, arrival_time
+  )
+
+
+#This is the code translator for incident types
+code_lookup <- tribble(
+  ~code,          ~code_name,
+  "111",  "Building Fire",
+  "113",  "Vehicle Fire",
+  "114",  "Cooking Fire",
+  "118",  "Trash or Rubbish Fire, Contained",
+  "121",  "Fire in Mobile Home",
+  "131",  "Passenger Vehicle Fire",
+  "132",  "Passenger Vehicle Fire",
+  "162",  "Outside Equipment Fire",
+  "311",  "Medical Assist, Assist EMS Crew",
+  "320",  "Emergency Medical Service Incident - Other",
+  "321",  "Medical Call (EMS)",
+  "322",  "MVA w/ Injuries",
+  "324",  "MVA w/out Injuries",
+  "360",  "Water & Ice-related Rescue - Other",
+  "381",  "Rescue or EMS Standby",
+  "444",  "Power Line Down",
+  "424",  "Carbon Monoxide Injuries",
+  "352",  "Extraction from Vehicle",
+  "520",  "Water Problem - Other",
+  "522",  "Water or Steam Leak",
+  "552",  "Police Matter",
+  "553",  "Public Service",
+  "554",  "Assist Invalid",
+  "611",  "Dispatched & Cancelled En Route",
+  "622",  "No Incident Found On Arrival At Dispatch Address",
+  "651",  "Smoke Scare, Odor Of Smoke",
+  "700",  "False Alarm or False Call - Other",
+  "711",  "Municipal Alarm System, Malicious False Alarm",
+  "714",  "Central Station, Malicious False Alarm",
+  "715",  "Local Alarm System, Malicious False Alarm",
+  "730",  "System Malfunction - Other",
+  "735",  "Alarm System Sounded Due To Malfunction",
+  "743",  "Smoke Detector Activation, No Fire - Unintentional",
+  "744",  "Detector Activation, No Fire - Unintentional",
+  "745",  "Alarm System Activation, No Fire - Unintentional",
+  "746",  "Carbon Monoxide Detector Activation, No CO",
+  "800",  "Severe weather or natural disaster, other",
+  "751", "Biological hazard, malicious false report",
+  "812",  "Flood Assessment",
+  "813",  "Wind storm. Includes tornado, hurricane, or cyclone assessment. No other service rendered.",
+  "814",  "Lightning strike (no fire). Includes investigation.",
+  "815",  "Severe weather or natural disaster standby.",
+  "900",  "Citizen’s complaint. Includes reports of code or ordinance violation",
+  "911",  "Special type of incident, other.")
+
+
+#This is the look-up table for actions taken
+
+action_taken_codes <- tribble(
+  ~code,          ~code_name,
+  "93",  "Canceled en route",
+  "92",  "Standby",
+  "91",  "Fill in, move up to another fire station",
+  "90",  "Fill-in, standby, other",
+  "87",  "Investigate Fire Out on Arrival",
+  "86",  "Information, Investigation, and Enforcement",
+  "85",  "Information, Investigation, and Enforcement",
+  "84",  "Information, Investigation, and Enforcement",
+  "83",  "Information, Investigation, and Enforcement",
+  "82",  "Information, Investigation, and Enforcement",
+  "81",  "Information, Investigation, and Enforcement",
+  "80",  "Information, Investigation, and Enforcement",
+  "79",  "Assess damage from severe weather or the results of a natural disaster.",
+  "78",  "Control traffic. Includes setting up barricades and directing traffic",
+  "77",  "Control crowd. Includes restricting pedestrian access to an area. Excludes control of vehicles (78)",
+  "76",  "Provide water. Includes tanker shuttle operations and pumping in a relay or from a water source. Excludes
+normal fire suppression operations.",
+  "75",  "Provide equipment, where equipment is used by another agency.",
+  "74",  "Provide apparatus",
+  "73",  "Provide manpower. Includes providing manpower to assist rescue/ambulance units lift patients or providing
+manpower to assist police",
+  "72",  "Assist animal. Includes animal rescue, extrication, removal, or transport.",
+  "71",  "Assist physically disabled. Includes providing nonmedical assistance to physically disabled, handicapped, or
+elderly citizens",
+  "70",  "Assistance Other",
+  "66",  "Remove water or control flooding condition.",
+  "65",  "Secure property. Includes property conservation activities such as covering broken windows or holes in roofs",
+  "64",  "Shut down system. Includes shutting down water, gas, and fire alarm systems",
+  "63",  "Restore fire alarm system. Includes restoring fire alarm systems monitored by the fire service",
+  "62",  "Restore sprinkler or fire protection system",
+  "61",  "Restore municipal services. Includes turning water back on and notifying the gas company to turn the gas on",
+  "60",  "Systems and services, other",
+  "58",  "Operate apparatus or vehicle.",
+  "55",  "Establish safe area. Includes isolating the area affected by denying entry to unprotected persons and establishing
+hazard control zones (hot, warm, cold).",
+  "54",  "Determine if the materials released are nonhazardous through product identification and environmental
+monitoring.",
+  "52",  "Forcible entry, performed by fire service. Includes support to law enforcement.",
+  "51",  "Ventilate. Includes nonhazardous odor removal and removal of smoke from nonhazardous materials-related
+fires.",
+  "50",  "Fires, rescues, and hazardous conditions, other.",
+  "47",  "Decontamination of occupancy or area exposed to hazardous materials",
+  "45",  "Remove hazard. Includes neutralizing a hazardous condition",
+  "44",  "Hazardous materials leak control and containment. Includes actions taken to keep a material within its container,
+such as plugging/patching operations, neutralization, pressure isolation/reduction, solidification, and
+vacuuming.",
+  "43",  "Hazardous materials spill control and confinement. Includes confining or diking hazardous materials. These
+are actions taken to confine the product released to a limited area including the use of absorbents, damming/
+diking, diversion of liquid runoff, dispersion, retention, or vapor suppression.",
+  "42",  "Hazardous materials detection, monitoring, sampling, and analyzing using a variety of detection instruments
+including combustible gas indicators (CGIs) or explosimeter, oxygen monitors, colorimetric tubes, specific
+chemical monitors, and others. Results from these devices must be analyzed to provide information about the
+hazardous nature of the material or environment.",
+  "41",  "Identification, analysis of hazardous materials",
+  "40",  "Hazardous condition, other",
+  "34", "Transport of person from scene in fire service ambulance or apparatus.",
+  "33",  "Provide advanced life support (ALS)",
+  "32",  "Provide basic life support (BLS)",
+  "31",  "Provide first aid and check for injuries. Medical evaluation of patient.",
+  "30",  "Emergency medical services, other",
+  "24",  "Recover body or body parts.",
+  "23",  "Extrication or disentangling of a person. Excludes body recovery (24).",
+  "22",  "Rescue, remove from harm. Excludes vehicle extrication (23).",
+  "21",  "Search for lost or missing persons. Includes animals.",
+  "20",  "Search and rescue, other.",
+  "16",  "Control fire (wildland). Includes when fire crews or resources completely surround the fire perimeter with
+control lines; extinguish any spot fires; burn any area adjacent to the fire side of the control lines; and cool
+down all hot spots that are immediate threats to the control line, until the lines can reasonably be expected to
+hold under foreseeable conditions.",
+  "14",  "Contain fire (wildland). Includes taking suppression action that can reasonably be expected to check the fire
+spread under prevailing and predicted conditions.",
+  "13",  "Establish fire lines around wildfire perimeter. Includes clearing firebreaks using direct, indirect, and burnout
+tactics as appropriate",
+  "12",  "Salvage and overhaul.",
+  "11",  "Extinguishment by fire service personnel.",
+  "10",  "Fire control or extinguishment, other.",
+  "0",  "Action taken, other")
+
+#source https://www.usfa.fema.gov/downloads/pdf/nfirs/nfirs_complete_reference_guide_2015.pdf
+
+
+###################
+
+#Stacking all years with bind rows
+
+####################
+
+
+
+Incidents_2014_2018 <- bind_rows(
+  "2014" = Incidents_2014_fixed %>%
+    mutate(across(any_of(c("fdid", "act_tak1", "act_tak2", "act_tak3")), as.character)),
+  
+  "2015" = Incidents_2015_fixed %>%
+    mutate(across(any_of(c("fdid", "act_tak1", "act_tak2", "act_tak3")), as.character)),
+  
+  "2016" = Incidents_2016_fixed %>%
+    mutate(across(any_of(c("fdid", "act_tak1", "act_tak2", "act_tak3")), as.character)),
+  
+  "2017" = Incidents_2017_fixed %>%
+    mutate(across(any_of(c("fdid", "act_tak1", "act_tak2", "act_tak3")), as.character)),
+  
+  "2018" = Incidents_2018_fixed %>%
+    mutate(across(any_of(c("fdid", "act_tak1", "act_tak2", "act_tak3")), as.character)),
+  
+  .id = "source_year"
+) %>%
+  mutate(source_year = as.integer(source_year)) %>%
+  arrange(alarm_datetime)
+
+#THIS WILL BE CHANGED IN THE FUTURE. I HAVE NOT YET WORKED WITH NFIRS DATA 
+#PULLED FROM WEBSITE. THIS WAS PULLED FROM ARCGIS PRO BEFORE I KNEW ABOUT THE WEBSITE
+
+Incidents_2019_2025 <- bind_rows(
+  "2019" = Incidents_2019_fixed%>%
+    mutate(fdid = as.character(fdid)),
+  "2020" = Incidents_2020_fixed%>%
+    mutate(fdid = as.character(fdid)),
+  "2021" = Incidents_2021_fixed%>%
+    mutate(fdid = as.character(fdid)),
+  "2022" = Incidents_2022_fixed%>%
+    mutate(fdid = as.character(fdid)),
+  "2023" = Incidents_2023_fixed%>%
+    mutate(fdid = as.character(fdid)),
+  "2024" = Incidents_2024_fixed%>%
+    mutate(fdid = as.character(fdid)),
+  "2025" = Incidents_2025_fixed%>%
+    mutate(fdid = as.character(fdid)),
+  .id = "source_year"
+) %>%
+  mutate(source_year = as.integer(source_year)) %>%
+  arrange(alarm_datetime)
+
+
+character_cols <- c(
+  "fdid", "streetname", "inc_type", "aid",
+  "act_tak1", "act_tak2", "act_tak3",
+  "match_addr", "incident_date_formatted",
+  "alarm_time", "arrival_time"
+)
+
+yearly_incidents <- lapply(yearly_incidents, function(df) {
+  df %>%
+    mutate(
+      across(any_of(character_cols), as.character)
+    )
+})
+
+
+Incidents_2019_2025 <- bind_rows(
+  yearly_incidents,
+  .id = "source_year"
+) %>%
+  mutate(source_year = as.integer(source_year)) %>%
+  arrange(alarm_datetime)
+
+##################
+
+#translating the incidents
+
+###################
+
+#THIS TRANSLATES THE INCIDENT CODES INTO NFIRS DESCRIPTIONS
+
+translated_incidents_2014_2018 <- Incidents_2014_2018 %>%
+  mutate(
+    across(
+      c(inc_type, act_tak1, act_tak2, act_tak3),
+      as.character
+    )
+  ) %>%
+  
+  # Translate incident type
+  left_join(
+    code_lookup %>%
+      rename(inc_type_name = code_name),
+    by = c("inc_type" = "code")
+  ) %>%
+  
+  # Translate first action taken
+  left_join(
+    action_taken_codes %>%
+      transmute(
+        code = as.character(code),
+        act_tak1_name = code_name
+      ),
+    by = c("act_tak1" = "code")
+  ) %>%
+  
+  # Translate second action taken
+  left_join(
+    action_taken_codes %>%
+      transmute(
+        code = as.character(code),
+        act_tak2_name = code_name
+      ),
+    by = c("act_tak2" = "code")
+  ) %>%
+  
+  # Translate third action taken
+  left_join(
+    action_taken_codes %>%
+      transmute(
+        code = as.character(code),
+        act_tak3_name = code_name
+      ),
+    by = c("act_tak3" = "code")
+  ) %>%
+  
+  arrange(desc(fdid))
+
+######################
+
+# Adding True/False variable for the emergency incidents
+# based on alarm time.
+
+############################
+
+flood_start <- Flood_summary_11044300_new$start_time
+flood_end   <- Flood_summary_11044300_new$end_time
+
+Incidents_2014_2018_flood <- Incidents_2014_2018 %>%
+  mutate(
+    flooded_conditions = vapply(
+      alarm_datetime,
+      function(x) {
+        if (is.na(x)) return(NA)
+        
+        any(
+          x >= flood_start & x <= flood_end,
+          na.rm = TRUE
+        )
+      },
+      logical(1)
+    )
+  )
+  
+#######################
+
+# Calculating travel times with 
+# Tidygeocoder 
+
+#######################
+library(tidygeocoder)
+library(stringr)
+library(dplyr)
+library(purrr)
+
+address_lookup <- Incidents_2014_2018 %>% #this grabs the addresses 
+  transmute(                             #and makes a lookup table
+    match_addr = str_squish(as.character(match_addr))
+  ) %>%
+  filter(
+    !is.na(match_addr),
+    match_addr != ""
+  ) %>%
+  distinct(match_addr) %>%
+  mutate(address_id = row_number())
+
+#This splits up the address limit so tidygeocoder doesnt break
+address_batches <- split(
+  address_lookup,
+  ceiling(seq_len(nrow(address_lookup)) / 9000)
+)
+
+# These are the functions used to assign census blocks to each address 
+census_lookup <- map_dfr(
+  address_batches,
+  function(x) {
+    
+    geocode(
+      x,
+      address = "match_addr",
+      method = "census",
+      full_results = TRUE,
+      
+      # Return census geography information
+      api_options = list(
+        census_return_type = "geographies"
+      ),
+      
+      # Use 2010 Census geographic boundaries
+      custom_query = list(
+        benchmark = "Public_AR_Current",
+        vintage = "Census2010_Current"
+      ),
+      
+      batch_limit = 9000,
+      verbose = TRUE
+    )
+  }
+)
+census_lookup <- map_dfr(
+  address_batches,
+  function(x) {
+    
+    geocode(
+      x,
+      address = "match_addr",
+      method = "census",
+      full_results = TRUE,
+      
+      # Return census geography information
+      api_options = list(
+        census_return_type = "geographies"
+      ),
+      
+      # Use 2010 Census geographic boundaries
+      custom_query = list(
+        benchmark = "Public_AR_Current",
+        vintage = "Census2010_Current"
+      ),
+      
+      batch_limit = 9000,
+      verbose = TRUE
+    )
+  }
+)
+
+##############################
+
+# Generate the addresse'and join
+# to the master flood data
+
+##############################
+
+census_lookup <- census_lookup %>%
+  mutate(
+    
+    block_geoid_2010 = if_else(
+      !is.na(state_fips) &
+        !is.na(county_fips) &
+        !is.na(census_tract) &
+        !is.na(census_block),
+      
+      paste0(
+        state_fips,
+        county_fips,
+        census_tract,
+        census_block
+      ),
+      
+      NA_character_
+    ),
+    
+    # First digit of the block identifies the block group
+    block_group_geoid_2010 = if_else(
+      !is.na(block_geoid_2010),
+      
+      paste0(
+        state_fips,
+        county_fips,
+        census_tract,
+        substr(census_block, 1, 1)
+      ),
+      
+      NA_character_
+    )
+  )
+
+Incidents_2014_2018_census <- Incidents_2014_2018 %>%
+  left_join(
+    census_lookup %>%
+      select(
+        match_addr,
+        lat,
+        long,
+        match_indicator,
+        match_type,
+        matched_address,
+        state_fips,
+        county_fips,
+        census_tract,
+        census_block,
+        block_geoid_2010,
+        block_group_geoid_2010
+      ),
+    by = "match_addr"
+  )
+
+#
+# this tallies the number of emergencies in
+# each census block
+#
+
+Emergency_by_block <- Incidents_2014_2018_census %>%
+  filter(!is.na(block_geoid_2010)) %>%
+  group_by(
+    block_geoid_2010,
+    flooded_conditions
+  ) %>%
+  summarise(
+    total_incidents = n(),
+    mean_response_min = mean(
+      response_time_min,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  )
+
+#Isolates the census block GEOIDS
+
+Incidents_2014_2018_flood_geo <- Incidents_2014_2018_flood %>%
+  left_join(
+    census_lookup %>%
+      select(match_addr, block_geoid_2010) %>%
+      distinct(),
+    by = "match_addr"
+  )
+  
+###############################
+
+# this calculates flood travel time 
+# using historical alarm response values
+
+###############################
+  
+  Incidents_2014_2018_flood_block <- Incidents_2014_2018_flood_geo %>%
+  
+  # Add emergency counts by census block and flood condition
+  left_join(
+    emergency_by_block,
+    by = c(
+      "block_geoid_2010",
+      "flooded_conditions"
+    )
+  ) %>%
+  
+  # Standardize incident and action codes
+  mutate(
+    across(
+      c(inc_type, act_tak1, act_tak2, act_tak3),
+      as.character
+    )
+  ) %>%
+  
+  # Translate incident type
+  left_join(
+    code_lookup %>%
+      transmute(
+        code = as.character(code),
+        inc_type_name = code_name
+      ),
+    by = c("inc_type" = "code")
+  ) %>%
+  
+  # Translate first action
+  left_join(
+    action_taken_codes %>%
+      transmute(
+        code = as.character(code),
+        act_tak1_name = code_name
+      ),
+    by = c("act_tak1" = "code")
+  ) %>%
+  
+  # Translate second action
+  left_join(
+    action_taken_codes %>%
+      transmute(
+        code = as.character(code),
+        act_tak2_name = code_name
+      ),
+    by = c("act_tak2" = "code")
+  ) %>%
+  
+  # Translate third action
+  left_join(
+    action_taken_codes %>%
+      transmute(
+        code = as.character(code),
+        act_tak3_name = code_name
+      ),
+    by = c("act_tak3" = "code")
+  ) %>%mutate(
+    response_time_min = as.numeric(
+      difftime(arrival_datetime, alarm_datetime, units = "mins")
+    ))%>%
+  
+  arrange(alarm_datetime)
+  
+#################################
+
+# Address Coordinates
+
+#################################
+  
+address_coordinates <- census_lookup %>%
+  select(
+    match_addr,
+    lat,
+    long,
+    match_indicator,
+    match_type,
+    matched_address
+  ) %>%
+  mutate(
+    latitude = as.numeric(lat),
+    longitude = as.numeric(long)
+  ) %>%
+  select(
+    match_addr,
+    latitude,
+    longitude,
+    match_indicator,
+    match_type,
+    matched_address
+  )
+
+Incidents_2014_2018_flood_xy <- Incidents_2014_2018_flood_block %>%
+  left_join(
+    address_coordinates,
+    by = "match_addr",
+    relationship = "many-to-one"
+  ) %>%
+  arrange(alarm_datetime)
+
+#######################
+
+# Response time statists
+
+#########################
+
+flood_response_times<-Incidents_2014_2018_flood_xy%>%
+  filter(flooded_conditions=="TRUE")%>%
+  summarize(mean_flood = mean(response_time_min, na.rm = TRUE),
+stdev_flood= sd(response_time_min, na.rm = TRUE),
+IQR_flood= IQR(response_time_min, na.rm = TRUE),
+max_flood= max(response_time_min, na.rm = TRUE),
+min_flood= min(response_time_min, na.rm = TRUE))
+
+
+standard_response_times<-Incidents_2014_2018_flood_xy%>%
+  filter(flooded_conditions=="FALSE")%>%
+  summarize(mean_std = mean(response_time_min, na.rm = TRUE),
+            stdev_std= sd(response_time_min, na.rm = TRUE),
+            IQR_std= IQR(response_time_min, na.rm = TRUE),
+            max_std= max(response_time_min, na.rm = TRUE),
+            min_std= min(response_time_min, na.rm = TRUE))
+               
+
+medical_flood_response_times<-Incidents_2014_2018_flood_xy%>%
+  filter(flooded_conditions=="TRUE",
+         between(inc_type,300,399))%>%
+  summarize(mean_flood = mean(response_time_min, na.rm = TRUE),
+            stdev_flood= sd(response_time_min, na.rm = TRUE),
+            IQR_flood= IQR(response_time_min, na.rm = TRUE),
+            max_flood= max(response_time_min, na.rm = TRUE),
+            min_flood= min(response_time_min, na.rm = TRUE))
+
+medical_standard_response_times<-Incidents_2014_2018_flood_xy%>%
+  filter(flooded_conditions=="FALSE",
+         between(inc_type,300,399))%>%
+  summarize(mean_std = mean(response_time_min, na.rm = TRUE),
+            stdev_std= sd(response_time_min, na.rm = TRUE),
+            IQR_std= IQR(response_time_min, na.rm = TRUE),
+            max_std= max(response_time_min, na.rm = TRUE),
+            min_std= min(response_time_min, na.rm = TRUE))

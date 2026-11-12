@@ -1,0 +1,70 @@
+---
+title: "Method: Scrape & Process Traffic Data"
+author: "Alecia Dezzani"
+format: html
+editor: visual
+---
+
+## Description
+
+This document shows the process for tidying the scraped data from the San Diego County Traffic Advisory Committee's 2019 Traffic Study including Sandia Creek Road. Sandia Creek Road is a striped two-lane local roadway 25-feet in width. The roadway is striped with a no passing centerline. There are speed advisory curves along the segment. The roadway is classified as a Minor Collector (2.3C) in the County General Plan Mobility Element Network primarily intended for residential neighborhoods or for rural areas with steep slopes and physical constraints. The roadway has a 55 MPH unposted speed zone.
+
+The raw data was extracted from the tables within a PDF.
+
+## Load Packages
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(here)
+```
+
+# Part 1: 2019 2-day Traffic Study
+
+## Load Data
+
+```{r}
+traffic_data_2019_orig <- read_csv(here("traffic_study_data", "traffic_volume_2019-08_combined.csv"))
+```
+
+## Make data "tidy"
+
+```{r}
+traffic_data_2019 <- traffic_data_2019_orig |>
+  clean_names() |>
+  select(date:wb) |>
+  pivot_longer(cols = nb:wb,
+               names_to = "direction",
+               values_to = "count")
+```
+
+# Part 2: 2024 1-day Traffic Study
+
+## Load Data
+
+```{r}
+traffic_data_2024_orig <- read_csv(here("traffic_study_data", "volume_2024-10-15.csv"))
+```
+
+## Make data "tidy"
+
+```{r}
+traffic_data_2024 <- traffic_data_2024_orig |>
+  clean_names() |>
+  select(date, day, time, nb, sb, eb, wb)|>
+  pivot_longer(cols = nb:wb,
+               names_to = "direction",
+               values_to = "count")
+```
+
+## Combine all traffic data (72 hours total)
+
+```{r}
+traffic_data <- bind_rows(traffic_data_2019, traffic_data_2024)
+```
+
+## Save as CSV
+
+```{r}
+write_csv(traffic_data, here("traffic_study_data", "traffic_data.csv"))
+```

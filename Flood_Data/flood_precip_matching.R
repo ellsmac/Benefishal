@@ -1,16 +1,47 @@
 # Historical Precipiation & Flood Event Data Matching
 # Author: E MacLean
-# Created: Nov 2, 2026
+# Created: Nov 4, 2025
 # Modified: None
 ####################
-# Goal of this script is to combine historical precipitation data w/ log of flood events
-# to get an idea of how precip is correlated w/ flooding
+#goal of this script is to combine our cleaned precip and flood datasets!
 
-# Data Description
-  #for flood data we have USGS gauge 110443000 (bridge gauge), flood incidents are
-  #any point when gauge reads >2300 cfs
-  #for precip data we have actuals from Riverside County Flood Control district
-  #for a Temecula gauge, years 2014-2025
-  #also have synthetic data from OSU PRISM, specific to our study area from years 1992-2025
+#clean enviro
+rm(list = ls())
 
-#Data Loading
+#loading data
+floods_daily <- read_csv(here("Flood_Data/clean_data",
+                              "daily_flood_buffer.csv"))
+                              #loads with annoying "...1" column
+
+t_precip <- read_csv(here("Flood_data/clean_data", 
+     "temecula_precip_actuals_2014_2024.csv"))
+      #will load with annoying extra column called "...1"
+
+prism_precip <- read_csv(here("Flood_Data/clean_data",
+                              "prism_precip_clean.csv"))
+
+#####
+#quick data cleaning
+floods_daily <- floods_daily |>
+  select(-...1)
+
+t_precip <- t_precip |>
+  select(-...1)
+
+######
+#joining actual precip to flood data!
+flood_precip <- floods_daily |>
+  left_join(t_precip, by = "date_pst")
+
+#joining prism precip too
+flood_precip_prism <- flood_precip |>
+  left_join(prism_precip, by = "date_pst") |>
+  rename(t_precip_in = precip_inches)
+
+
+
+
+
+
+
+
