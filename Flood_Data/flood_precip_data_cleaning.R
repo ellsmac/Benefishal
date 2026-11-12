@@ -12,6 +12,9 @@
   #for a Temecula gauge, years 2014-2025
   #also have synthetic data from OSU PRISM, specific to our study area from years 1992-2025, but will hold off on that for now
 
+#clear enviro
+rm(list = ls())
+
 #Library Loading
 library(here) #allows pointed file structure, essential for Mac to PC coding
 library(tidyverse)
