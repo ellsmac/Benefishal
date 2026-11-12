@@ -977,6 +977,7 @@ flood_events <- bind_rows(pf_1992, pf_1993_94, pf_1995_97, pf_1998_00,
 flood_events <- flood_events |>
   select(-date)
 
+write_csv(flood_events, here("Flood_data/clean_data", "flood_events.csv"))
 
 
 
