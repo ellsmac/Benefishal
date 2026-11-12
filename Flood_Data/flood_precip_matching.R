@@ -67,6 +67,9 @@ floods_precip <- floods_daily |>
   left_join(t_precip_windows, by = "date_pst")
   #has lots of NAs in precip columns bc we only have 10 years of actual precip data atm
 
+#saving floods_precip data
+write_csv(floods_precip, here("Flood_data/clean_data", "floods_precip.csv"))
+
 
 
 
