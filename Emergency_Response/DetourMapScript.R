@@ -158,6 +158,36 @@ OVERPASS_FALLBACK_URLS <- c(
 HARRIS_TURN_LAT <- 33.408660
 HARRIS_TURN_LON <- -117.273281
 HARRIS_TURN_MAX_SNAP_M <- 100
+
+# ---------------------------------------------------------------------------
+# NCFPD STATION 1 - I-15 / RANCHO CALIFORNIA ROAD ALTERNATIVE
+# ---------------------------------------------------------------------------
+
+I15_STATION_WAYPOINTS <- tibble(
+  waypoint_order = 1:2,
+  waypoint_name = c(
+    "I-15 approach",
+    "Sandia Creek Drive entry"
+  ),
+  latitude = c(
+    33.387876,
+    33.498885
+  ),
+  longitude = c(
+    -117.173591,
+    -117.188206
+  )
+)
+
+I15_WAYPOINT_MAX_SNAP_M <- 250
+
+# Minimum distance the reconstructed waypoint-to-waypoint route must
+# overlap each intended road corridor (with a small spatial tolerance).
+I15_MIN_MOTORWAY_OVERLAP_M <- 1000
+I15_MIN_RANCHO_OVERLAP_M <- 100
+I15_MIN_AVENIDA_OVERLAP_M <- 15
+I15_MIN_SANDIA_OVERLAP_M <- 5
+
 # ---------------------------------------------------------------------------
 # 1. PACKAGES, SESSION SETTINGS, INPUT DATA
 # ---------------------------------------------------------------------------
@@ -709,6 +739,11 @@ route_input_coords <- bind_rows(
   ncfpd1_origin_row %>% transmute(lon = origin_lon, lat = origin_lat),
   temecula_origin_row %>% transmute(lon = origin_lon, lat = origin_lat),
   detour_waypoints_geocoded %>% transmute(lon = longitude, lat = latitude),
+  I15_STATION_WAYPOINTS %>%
+    transmute(
+      lon = longitude,
+      lat = latitude
+    ),
   yellow_block_lookup_north %>% transmute(lon = block_point_lon, lat = block_point_lat),
   tibble(lon = SPECIAL_TARGET_LON, lat = SPECIAL_TARGET_LAT)
 ) %>% filter(is.finite(lon), is.finite(lat))
@@ -763,100 +798,281 @@ osm_roads <- osm_roads %>%
   mutate(osm_id = as.character(osm_id))
 if (!"highway" %in% names(osm_roads)) stop("OSM road features lack the highway field.")
 if (!"name" %in% names(osm_roads)) osm_roads$name <- NA_character_
+# Retain interstate route-reference tags for identifying I-15.
+if (!"ref" %in% names(osm_roads)) {
+  osm_roads$ref <- NA_character_
+}
 
+if (!"int_ref" %in% names(osm_roads)) {
+  osm_roads$int_ref <- NA_character_
+}
 required_crossing_ids <- c(DE_LUZ_BRIDGE_OSM_ID, CURRENT_SANDIA_BRIDGE_OSM_ID)
 missing_required_ids <- setdiff(required_crossing_ids, osm_roads$osm_id)
 if (length(missing_required_ids) > 0) {
   stop("OSM road query did not return required crossing OSM IDs: ", paste(missing_required_ids, collapse = ", "))
 }
 
-# ---------------------------------------------------------------------------
-# 11. CLEAN MOTORCAR ROADS AND AUDIT EVERY RIVER CONTACT
-# ---------------------------------------------------------------------------
+# ============================================================================
+# 11. CLEAN MOTORCAR ROADS, AUDIT RIVER CONTACTS, AND BUILD FOUR NETWORKS
+# ============================================================================
+
+# ============================================================================
+# 11A. CLEAN OSM ROAD ATTRIBUTES
+# ============================================================================
 
 clean_osm_maxspeed <- function(x) {
-  if (!"maxspeed" %in% names(x)) x$maxspeed <- NA_character_
+  
+  if (!"maxspeed" %in% names(x)) {
+    x$maxspeed <- NA_character_
+  }
+  
   raw_speed <- trimws(as.character(x$maxspeed))
-  numeric_speed <- suppressWarnings(readr::parse_number(raw_speed))
-  mph_rows <- !is.na(raw_speed) & str_detect(str_to_lower(raw_speed), "mph")
-  numeric_speed[mph_rows] <- numeric_speed[mph_rows] * 1.609344
-  valid_speed <- is.finite(numeric_speed) & numeric_speed > 0
-  x$maxspeed <- ifelse(valid_speed, as.character(numeric_speed), NA_character_)
+  
+  numeric_speed <- suppressWarnings(
+    readr::parse_number(raw_speed)
+  )
+  
+  mph_rows <- !is.na(raw_speed) &
+    str_detect(str_to_lower(raw_speed), "mph")
+  
+  numeric_speed[mph_rows] <-
+    numeric_speed[mph_rows] * 1.609344
+  
+  valid_speed <- is.finite(numeric_speed) &
+    numeric_speed > 0
+  
+  x$maxspeed <- ifelse(
+    valid_speed,
+    as.character(numeric_speed),
+    NA_character_
+  )
+  
   x
 }
 
+
+# Ensure optional OSM attributes exist.
 roads_tagged <- clean_osm_maxspeed(osm_roads)
-access_fields <- c("access", "vehicle", "motor_vehicle", "motorcar", "ford")
-for (field in access_fields) {
-  if (!field %in% names(roads_tagged)) roads_tagged[[field]] <- NA_character_
+
+optional_osm_fields <- c(
+  "name",
+  "ref",
+  "int_ref",
+  "bridge",
+  "layer",
+  "surface",
+  "oneway",
+  "access",
+  "vehicle",
+  "motor_vehicle",
+  "motorcar",
+  "ford"
+)
+
+for (field in optional_osm_fields) {
+  
+  if (!field %in% names(roads_tagged)) {
+    roads_tagged[[field]] <- NA_character_
+  }
 }
+
+access_fields <- c(
+  "access",
+  "vehicle",
+  "motor_vehicle",
+  "motorcar",
+  "ford"
+)
+
 roads_tagged <- roads_tagged %>%
   mutate(
-    across(all_of(access_fields), ~ str_to_lower(trimws(as.character(.x)))),
-    highway_clean = str_to_lower(trimws(as.character(highway)))
+    across(
+      all_of(access_fields),
+      ~ str_to_lower(trimws(as.character(.x)))
+    ),
+    across(
+      all_of(c("name", "ref", "int_ref", "bridge", "layer")),
+      ~ trimws(as.character(.x))
+    ),
+    highway_clean = str_to_lower(
+      trimws(as.character(highway))
+    ),
+    osm_id = as.character(osm_id)
   )
 
-motorcar_profile <- dodgr::weighting_profiles$weighting_profiles %>%
+
+# ============================================================================
+# 11B. IDENTIFY MOTORCAR-ACCESSIBLE ROAD FEATURES
+# ============================================================================
+
+motorcar_profile <-
+  dodgr::weighting_profiles$weighting_profiles %>%
   filter(name == "motorcar")
-motorcar_types <- unique(as.character(motorcar_profile$way))
-nonmotorized_highways <- c("footway", "path", "pedestrian", "steps", "bridleway", "cycleway")
-restricted_access_values <- c("no", "private")
+
+motorcar_types <- unique(
+  as.character(motorcar_profile$way)
+)
+
+nonmotorized_highways <- c(
+  "footway",
+  "path",
+  "pedestrian",
+  "steps",
+  "bridleway",
+  "cycleway"
+)
+
+restricted_access_values <- c(
+  "no",
+  "private"
+)
 
 roads_vehicle_all <- roads_tagged %>%
   filter(
     !is.na(highway_clean),
     highway_clean %in% motorcar_types,
     !highway_clean %in% nonmotorized_highways,
+    
     is.na(ford) | ford %in% c("", "no"),
+    
     if_all(
-      all_of(c("access", "vehicle", "motor_vehicle", "motorcar")),
-      ~ is.na(.x) | !.x %in% restricted_access_values
+      all_of(
+        c(
+          "access",
+          "vehicle",
+          "motor_vehicle",
+          "motorcar"
+        )
+      ),
+      ~ is.na(.x) |
+        !.x %in% restricted_access_values
     ),
+    
     osm_id != UNVERIFIED_TRACK_CROSSING_OSM_ID
   ) %>%
-  select(-highway_clean)
+  select(-highway_clean) %>%
+  mutate(osm_id = as.character(osm_id))
 
-# Identify all OSM ways that geometrically touch/cross the river centerline.
-# Only De Luz and the current Sandia Creek bridge are approved crossings.
-osm_roads_utm <- st_transform(osm_roads, 26911)
-all_centerline_contacts <- lengths(st_intersects(osm_roads_utm, river_centerline_utm)) > 0
-all_centerline_crosses <- lengths(st_crosses(osm_roads_utm, river_centerline_utm)) > 0
+if (nrow(roads_vehicle_all) == 0) {
+  stop("Motorcar road filtering returned an empty road network.")
+}
+
+message(
+  "OSM road features: ", nrow(osm_roads),
+  "; retained motorcar features: ", nrow(roads_vehicle_all)
+)
+
+
+# ============================================================================
+# 11C. AUDIT ALL ROAD FEATURES THAT TOUCH OR CROSS THE RIVER CENTERLINE
+# ============================================================================
+
+osm_roads_utm <- st_transform(
+  osm_roads,
+  26911
+)
+
+all_centerline_contacts <- lengths(
+  st_intersects(
+    osm_roads_utm,
+    river_centerline_utm
+  )
+) > 0
+
+all_centerline_crosses <- lengths(
+  st_crosses(
+    osm_roads_utm,
+    river_centerline_utm
+  )
+) > 0
+
 river_way_audit <- osm_roads_utm %>%
   mutate(
     touches_river_centerline = all_centerline_contacts,
-    crosses_river_centerline = all_centerline_crosses
+    crosses_river_centerline = all_centerline_crosses,
+    osm_id = as.character(osm_id)
   ) %>%
-  filter(touches_river_centerline | crosses_river_centerline) %>%
+  filter(
+    touches_river_centerline |
+      crosses_river_centerline
+  ) %>%
   st_drop_geometry() %>%
-  select(any_of(c("osm_id", "name", "highway", "bridge", "layer", "ford", "access", "touches_river_centerline", "crosses_river_centerline"))) %>%
+  select(
+    any_of(
+      c(
+        "osm_id",
+        "name",
+        "ref",
+        "int_ref",
+        "highway",
+        "bridge",
+        "layer",
+        "ford",
+        "access",
+        "touches_river_centerline",
+        "crosses_river_centerline"
+      )
+    )
+  ) %>%
   mutate(
     osm_id = as.character(osm_id),
-    approved_crossing = osm_id %in% APPROVED_RIVER_CROSSING_IDS,
+    
+    approved_crossing =
+      osm_id %in% APPROVED_RIVER_CROSSING_IDS,
+    
     study_decision = case_when(
-      osm_id == DE_LUZ_BRIDGE_OSM_ID ~ "Retain for De Luz detour crossing",
-      osm_id == CURRENT_SANDIA_BRIDGE_OSM_ID ~ "Retain normal; remove during closure",
-      osm_id == UNVERIFIED_TRACK_CROSSING_OSM_ID ~ "Exclude unverified track crossing",
-      TRUE ~ "Exclude unapproved river contact/crossing"
+      osm_id == DE_LUZ_BRIDGE_OSM_ID ~
+        "Retain for De Luz detour crossing",
+      
+      osm_id == CURRENT_SANDIA_BRIDGE_OSM_ID ~
+        "Retain normal; remove during closure",
+      
+      osm_id == UNVERIFIED_TRACK_CROSSING_OSM_ID ~
+        "Exclude unverified track crossing",
+      
+      TRUE ~
+        "Exclude unapproved river contact/crossing"
     )
   )
 
-write_csv(river_way_audit, file.path(OUTPUT_DIR, "2020_OSM_River_Way_Audit.csv"))
+write_csv(
+  river_way_audit,
+  file.path(
+    OUTPUT_DIR,
+    "2020_OSM_River_Way_Audit.csv"
+  )
+)
 
-# Remove every motorcar way other than the two explicitly approved crossings
-# if the way intersects/touches the river centerline. This is a hard network
-# constraint, not merely a map annotation.
-river_contact_ids <- river_way_audit$osm_id
-unapproved_river_contact_ids <- setdiff(river_contact_ids, APPROVED_RIVER_CROSSING_IDS)
+print(river_way_audit)
+
+
+# ============================================================================
+# 11D. BUILD THE VERIFIED NORMAL AND CLOSURE-PREFIX NETWORKS
+# ============================================================================
+
+# Every motorcar road touching the river centerline must be one of the
+# two previously approved crossings.
+
+river_contact_ids <- unique(
+  as.character(river_way_audit$osm_id)
+)
+
+unapproved_river_contact_ids <- setdiff(
+  river_contact_ids,
+  APPROVED_RIVER_CROSSING_IDS
+)
+
 roads_vehicle_verified <- roads_vehicle_all %>%
-  filter(!osm_id %in% unapproved_river_contact_ids)
+  filter(
+    !osm_id %in% unapproved_river_contact_ids,
+    osm_id != UNVERIFIED_TRACK_CROSSING_OSM_ID
+  )
 
-# Also explicitly ensure the previously audited false track does not survive.
-roads_vehicle_verified <- roads_vehicle_verified %>%
-  filter(osm_id != UNVERIFIED_TRACK_CROSSING_OSM_ID)
-
+# Verify both approved bridge features exist in the motorcar network.
 if (!DE_LUZ_BRIDGE_OSM_ID %in% roads_vehicle_verified$osm_id) {
   stop("Verified De Luz bridge was removed from the motorcar network.")
 }
+
 if (!CURRENT_SANDIA_BRIDGE_OSM_ID %in% roads_vehicle_verified$osm_id) {
   stop("Current Sandia Creek bridge was removed from the normal network.")
 }
@@ -864,42 +1080,367 @@ if (!CURRENT_SANDIA_BRIDGE_OSM_ID %in% roads_vehicle_verified$osm_id) {
 # Normal network: both approved bridges available.
 roads_normal_final <- roads_vehicle_verified
 
-# Closure prefix: current Sandia Creek bridge removed; De Luz remains.
+# Closure-prefix network: remove current Sandia Creek bridge.
+# De Luz remains available as the only permitted river crossing.
 roads_closed_prefix <- roads_vehicle_verified %>%
-  filter(osm_id != CURRENT_SANDIA_BRIDGE_OSM_ID)
+  filter(
+    osm_id != CURRENT_SANDIA_BRIDGE_OSM_ID
+  )
 
-# Verify there are no unapproved centerline contacts left in either network.
-check_remaining_contacts <- function(roads_sf, label) {
-  roads_utm <- st_transform(roads_sf, 26911)
-  hit <- lengths(st_intersects(roads_utm, river_centerline_utm)) > 0
-  ids <- unique(as.character(roads_sf$osm_id[hit]))
-  unexpected <- setdiff(ids, APPROVED_RIVER_CROSSING_IDS)
+
+# ============================================================================
+# 11E. VERIFY THE NORMAL AND CLOSURE-PREFIX CROSSING RESTRICTIONS
+# ============================================================================
+
+check_remaining_contacts <- function(
+    roads_sf,
+    label
+) {
+  
+  roads_utm <- st_transform(
+    roads_sf,
+    26911
+  )
+  
+  hit <- lengths(
+    st_intersects(
+      roads_utm,
+      river_centerline_utm
+    )
+  ) > 0
+  
+  ids <- unique(
+    as.character(roads_sf$osm_id[hit])
+  )
+  
+  unexpected <- setdiff(
+    ids,
+    APPROVED_RIVER_CROSSING_IDS
+  )
+  
   if (length(unexpected) > 0) {
-    stop(label, " still contains unapproved river-contact ways: ", paste(unexpected, collapse = ", "))
+    
+    stop(
+      label,
+      " still contains unapproved river-contact ways: ",
+      paste(unexpected, collapse = ", ")
+    )
   }
+  
   ids
 }
-normal_contact_ids <- check_remaining_contacts(roads_normal_final, "Normal network")
-closure_contact_ids <- check_remaining_contacts(roads_closed_prefix, "Closure-prefix network")
-if (!setequal(closure_contact_ids, DE_LUZ_BRIDGE_OSM_ID)) {
-  stop("Closure-prefix network must contain only the De Luz river crossing; found: ", paste(closure_contact_ids, collapse = ", "))
+
+normal_contact_ids <- check_remaining_contacts(
+  roads_normal_final,
+  "Normal network"
+)
+
+closure_contact_ids <- check_remaining_contacts(
+  roads_closed_prefix,
+  "Closure-prefix network"
+)
+
+if (!setequal(
+  closure_contact_ids,
+  DE_LUZ_BRIDGE_OSM_ID
+)) {
+  
+  stop(
+    "Closure-prefix network must contain only the De Luz crossing. Found: ",
+    paste(closure_contact_ids, collapse = ", ")
+  )
 }
 
+
+# ============================================================================
+# 11F. EXPORT ORIGINAL BRIDGE-CROSSING DECISIONS
+# ============================================================================
+
 crossing_decision_audit <- tibble(
-  osm_id = c(UNVERIFIED_TRACK_CROSSING_OSM_ID, DE_LUZ_BRIDGE_OSM_ID, CURRENT_SANDIA_BRIDGE_OSM_ID),
-  feature = c("Unverified track crossing", "De Luz Road bridge", "Current Sandia Creek Drive bridge"),
+  
+  osm_id = c(
+    UNVERIFIED_TRACK_CROSSING_OSM_ID,
+    DE_LUZ_BRIDGE_OSM_ID,
+    CURRENT_SANDIA_BRIDGE_OSM_ID
+  ),
+  
+  feature = c(
+    "Unverified track crossing",
+    "De Luz Road bridge",
+    "Current Sandia Creek Drive bridge"
+  ),
+  
   in_normal_network = c(
     UNVERIFIED_TRACK_CROSSING_OSM_ID %in% roads_normal_final$osm_id,
     DE_LUZ_BRIDGE_OSM_ID %in% roads_normal_final$osm_id,
     CURRENT_SANDIA_BRIDGE_OSM_ID %in% roads_normal_final$osm_id
   ),
+  
   in_closure_prefix = c(
     UNVERIFIED_TRACK_CROSSING_OSM_ID %in% roads_closed_prefix$osm_id,
     DE_LUZ_BRIDGE_OSM_ID %in% roads_closed_prefix$osm_id,
     CURRENT_SANDIA_BRIDGE_OSM_ID %in% roads_closed_prefix$osm_id
   )
 )
-write_csv(crossing_decision_audit, file.path(OUTPUT_DIR, "River_Crossing_Network_Decisions.csv"))
+
+write_csv(
+  crossing_decision_audit,
+  file.path(
+    OUTPUT_DIR,
+    "River_Crossing_Network_Decisions.csv"
+  )
+)
+
+
+# ============================================================================
+# 11G. BUILD THE SEPARATE I-15 ALTERNATIVE ACCESS NETWORK
+# ============================================================================
+
+# IMPORTANT:
+# The I-15 alternative is NOT assigned arbitrary river-crossing IDs.
+#
+# All road features touching the Santa Margarita River centerline are
+# excluded from this independent network.
+#
+# The I-15/Rancho California/Avenida del Oro/Sandia Creek corridor is
+# retained as ordinary motorcar road geometry.
+#
+# The intended route is subsequently checked against the actual reconstructed
+# dodgr path in Section 21.
+
+i15_prohibited_ids <- unique(
+  c(
+    river_contact_ids,
+    DE_LUZ_BRIDGE_OSM_ID,
+    CURRENT_SANDIA_BRIDGE_OSM_ID,
+    UNVERIFIED_TRACK_CROSSING_OSM_ID
+  )
+)
+
+roads_i15_access <- roads_vehicle_all %>%
+  filter(
+    !osm_id %in% i15_prohibited_ids
+  )
+
+if (nrow(roads_i15_access) == 0) {
+  stop("I-15 alternative motorcar network is empty.")
+}
+
+# Explicitly confirm that both existing bridges are excluded.
+if (
+  any(
+    c(
+      DE_LUZ_BRIDGE_OSM_ID,
+      CURRENT_SANDIA_BRIDGE_OSM_ID
+    ) %in% roads_i15_access$osm_id
+  )
+) {
+  stop(
+    "De Luz or current Sandia Creek bridge unexpectedly remains ",
+    "in the I-15 alternative network."
+  )
+}
+
+# Explicitly verify that no river-centerline contacts remain.
+roads_i15_access_utm <- st_transform(
+  roads_i15_access,
+  26911
+)
+
+i15_remaining_contacts <- lengths(
+  st_intersects(
+    roads_i15_access_utm,
+    river_centerline_utm
+  )
+) > 0
+
+if (any(i15_remaining_contacts)) {
+  stop(
+    "I-15 alternative network contains road features ",
+    "intersecting the Santa Margarita River centerline."
+  )
+}
+
+message(
+  "I-15 alternative road features: ",
+  nrow(roads_i15_access),
+  "; remaining river-centerline contacts: ",
+  sum(i15_remaining_contacts)
+)
+
+
+# ============================================================================
+# 11H. IDENTIFY ROADS FOR THE INTENDED I-15 CORRIDOR
+# ============================================================================
+
+# Ensure that the optional road reference columns are available.
+# These fields are retained for road identification and QA.
+
+i15_motorway_features <- roads_i15_access %>%
+  filter(
+    as.character(highway) == "motorway"
+  )
+
+i15_ramp_features <- roads_i15_access %>%
+  filter(
+    as.character(highway) == "motorway_link"
+  )
+
+i15_rancho_features <- roads_i15_access %>%
+  filter(
+    str_detect(
+      coalesce(as.character(name), ""),
+      regex("Rancho California", ignore_case = TRUE)
+    )
+  )
+
+i15_avenida_features <- roads_i15_access %>%
+  filter(
+    str_detect(
+      coalesce(as.character(name), ""),
+      regex(
+        "Avenida.*Oro|Ave.*Oro",
+        ignore_case = TRUE
+      )
+    )
+  )
+
+i15_sandia_features <- roads_i15_access %>%
+  filter(
+    str_detect(
+      coalesce(as.character(name), ""),
+      regex("Sandia Creek", ignore_case = TRUE)
+    )
+  )
+
+# Inventory the roads available for the intended route.
+i15_named_road_audit <- tibble(
+  
+  intended_road = c(
+    "I-15 motorway",
+    "I-15 ramps",
+    "Rancho California Road",
+    "Avenida del Oro",
+    "Sandia Creek Drive"
+  ),
+  
+  retained_osm_segments = c(
+    nrow(i15_motorway_features),
+    nrow(i15_ramp_features),
+    nrow(i15_rancho_features),
+    nrow(i15_avenida_features),
+    nrow(i15_sandia_features)
+  )
+)
+
+write_csv(
+  i15_named_road_audit,
+  file.path(
+    OUTPUT_DIR,
+    "I15_Intended_Road_Network_Audit.csv"
+  )
+)
+
+print(i15_named_road_audit)
+
+# Do not stop merely because a name search fails.
+# A road may have incomplete OSM naming attributes. The actual waypoint
+# snapping and route-geometry validation will determine whether the intended
+# corridor is present and connected.
+
+if (nrow(i15_motorway_features) == 0) {
+  stop("No motorway features remain in the I-15 alternative network.")
+}
+
+
+# ============================================================================
+# 11I. EXPORT I-15 RIVER-CONTACT DECISIONS
+# ============================================================================
+
+i15_river_contact_audit <- river_way_audit %>%
+  mutate(
+    retained_in_i15_network =
+      osm_id %in% roads_i15_access$osm_id,
+    
+    decision = case_when(
+      
+      osm_id == DE_LUZ_BRIDGE_OSM_ID ~
+        "Excluded: De Luz bridge is not part of I-15 alternative",
+      
+      osm_id == CURRENT_SANDIA_BRIDGE_OSM_ID ~
+        "Excluded: closed Sandia Creek bridge",
+      
+      osm_id == UNVERIFIED_TRACK_CROSSING_OSM_ID ~
+        "Excluded: unverified crossing",
+      
+      retained_in_i15_network ~
+        "Retained in I-15 alternative",
+      
+      TRUE ~
+        "Excluded: river-centerline contact"
+    )
+  )
+
+write_csv(
+  i15_river_contact_audit,
+  file.path(
+    OUTPUT_DIR,
+    "I15_Alternative_River_Contact_Audit.csv"
+  )
+)
+
+
+# ============================================================================
+# 11J. FINAL SECTION 11 QUALITY CHECKS
+# ============================================================================
+
+stopifnot(
+  
+  nrow(roads_vehicle_all) > 0,
+  
+  nrow(roads_vehicle_verified) > 0,
+  
+  nrow(roads_normal_final) > 0,
+  
+  nrow(roads_closed_prefix) > 0,
+  
+  nrow(roads_i15_access) > 0,
+  
+  DE_LUZ_BRIDGE_OSM_ID %in%
+    roads_normal_final$osm_id,
+  
+  CURRENT_SANDIA_BRIDGE_OSM_ID %in%
+    roads_normal_final$osm_id,
+  
+  DE_LUZ_BRIDGE_OSM_ID %in%
+    roads_closed_prefix$osm_id,
+  
+  !CURRENT_SANDIA_BRIDGE_OSM_ID %in%
+    roads_closed_prefix$osm_id,
+  
+  !DE_LUZ_BRIDGE_OSM_ID %in%
+    roads_i15_access$osm_id,
+  
+  !CURRENT_SANDIA_BRIDGE_OSM_ID %in%
+    roads_i15_access$osm_id,
+  
+  !UNVERIFIED_TRACK_CROSSING_OSM_ID %in%
+    roads_i15_access$osm_id,
+  
+  !any(i15_remaining_contacts)
+)
+
+message("============================================================")
+message("SECTION 11 COMPLETE")
+message("Motorcar road features: ", nrow(roads_vehicle_all))
+message("Verified vehicle features: ", nrow(roads_vehicle_verified))
+message("Normal network: ", nrow(roads_normal_final))
+message("De Luz closure-prefix network: ", nrow(roads_closed_prefix))
+message("I-15 alternative network: ", nrow(roads_i15_access))
+message("Normal river contacts: ", length(normal_contact_ids))
+message("Closure-prefix river contacts: ", length(closure_contact_ids))
+message("I-15 river contacts: ", sum(i15_remaining_contacts))
+message("============================================================")
 
 # ---------------------------------------------------------------------------
 # 12. BUILD A STRICT NORTH-SIDE-ONLY MOTORCAR ROAD NETWORK
@@ -1779,6 +2320,108 @@ if (
   )
 }
 
+# ===========================================================================
+# 13I. I-15 ALTERNATIVE: STATION AND WAYPOINT SNAPS
+# ===========================================================================
+
+# Station 1 snaps to the independent I-15 access network.
+ncfpd1_i15_snapped <- snap_points_to_named_road(
+  points_df = ncfpd1_origin_row %>%
+    transmute(origin_lon, origin_lat),
+  roads_sf = roads_i15_access,
+  lon_col = "origin_lon",
+  lat_col = "origin_lat"
+)
+
+if (
+  !is.finite(ncfpd1_i15_snapped$distance_to_road_m[1]) ||
+  ncfpd1_i15_snapped$distance_to_road_m[1] >
+  MAX_NCFPD_ORIGIN_SNAP_M
+) {
+  stop("Station 1 failed its I-15 network snap validation.")
+}
+
+# First waypoint: station-side approach.
+i15_waypoint1_input <- I15_STATION_WAYPOINTS %>%
+  filter(waypoint_order == 1)
+
+i15_waypoint1_snapped <- snap_points_to_named_road(
+  points_df = i15_waypoint1_input,
+  roads_sf = roads_i15_access,
+  lon_col = "longitude",
+  lat_col = "latitude",
+  id_col = "waypoint_name"
+)
+
+# Second waypoint: snap specifically to the north-side-only road network.
+# This preserves the same coordinate handoff for the final block routes.
+i15_waypoint2_input <- I15_STATION_WAYPOINTS %>%
+  filter(waypoint_order == 2)
+
+i15_waypoint2_snapped <- snap_points_to_named_road(
+  points_df = i15_waypoint2_input,
+  roads_sf = roads_north_side,
+  lon_col = "longitude",
+  lat_col = "latitude",
+  id_col = "waypoint_name"
+)
+
+i15_waypoints_snapped <- bind_rows(
+  i15_waypoint1_snapped,
+  i15_waypoint2_snapped
+) %>%
+  arrange(waypoint_order)
+
+write_csv(
+  i15_waypoints_snapped,
+  file.path(OUTPUT_DIR, "I15_Alternative_Waypoint_Snaps.csv")
+)
+
+print(
+  i15_waypoints_snapped %>%
+    select(
+      waypoint_order,
+      waypoint_name,
+      routing_lon,
+      routing_lat,
+      distance_to_road_m,
+      nearest_road_name,
+      nearest_road_highway
+    )
+)
+
+if (
+  any(!is.finite(i15_waypoints_snapped$distance_to_road_m)) ||
+  any(
+    i15_waypoints_snapped$distance_to_road_m >
+    I15_WAYPOINT_MAX_SNAP_M
+  )
+) {
+  stop(
+    "One or more I-15 route waypoints exceed ",
+    I15_WAYPOINT_MAX_SNAP_M,
+    " m from their permitted road network. ",
+    "Review I15_Alternative_Waypoint_Snaps.csv."
+  )
+}
+
+# Verify the second waypoint is associated with the Sandia Creek corridor.
+if (
+  !str_detect(
+    coalesce(i15_waypoint2_snapped$nearest_road_name[1], ""),
+    regex("Sandia Creek|Avenida.*Oro", ignore_case = TRUE)
+  )
+) {
+  stop(
+    "The second I-15 waypoint did not snap to Sandia Creek Drive ",
+    "or Avenida del Oro. Actual nearest road: ",
+    i15_waypoint2_snapped$nearest_road_name[1],
+    ". Review I15_Alternative_Waypoint_Snaps.csv."
+  )
+}
+
+message("I-15 waypoint snapping completed.")
+
 
 # ---------------------------------------------------------------------------
 # 13I. FINAL SECTION 13 QUALITY CHECKS
@@ -1794,6 +2437,10 @@ stopifnot(
   is.finite(harris_turn_snap$routing_lat[1]),
   is.finite(ncfpd1_flooded_snapped$routing_lon[1]),
   is.finite(ncfpd1_flooded_snapped$routing_lat[1]),
+  is.finite(ncfpd1_i15_snapped$routing_lon[1]),
+  is.finite(ncfpd1_i15_snapped$routing_lat[1]),
+  all(is.finite(i15_waypoints_snapped$routing_lon)),
+  all(is.finite(i15_waypoints_snapped$routing_lat)),
   is.finite(ncfpd1_snapped$routing_lon[1]),
   is.finite(ncfpd1_snapped$routing_lat[1]),
   is.finite(temecula_snapped$routing_lon[1]),
@@ -1994,7 +2641,59 @@ north_nodes_xy <- rbind(
 )
 north_network <- build_routing_graph(roads_north_side, north_nodes_xy, "north-side-only final approach")
 graph_north_speedcap <- north_network$graph
+# ===========================================================================
+# I-15 ALTERNATIVE ROUTING GRAPHS - NCFPD STATION 1
+# ===========================================================================
 
+# Station 1 coordinates.
+ncfpd1_i15_xy <- make_xy_matrix(
+  ncfpd1_i15_snapped$routing_lon[1],
+  ncfpd1_i15_snapped$routing_lat[1],
+  "NCFPD_STATION_1_I15"
+)
+
+# Waypoint 1.
+i15_waypoint1_xy <- make_xy_matrix(
+  i15_waypoint1_snapped$routing_lon[1],
+  i15_waypoint1_snapped$routing_lat[1],
+  "I15_APPROACH"
+)
+
+# Waypoint 2.
+i15_waypoint2_xy <- make_xy_matrix(
+  i15_waypoint2_snapped$routing_lon[1],
+  i15_waypoint2_snapped$routing_lat[1],
+  "SANDIA_CREEK_ENTRY"
+)
+
+# Graph 1: Station 1, approach waypoint, and Sandia Creek entry.
+i15_access_nodes_xy <- rbind(
+  ncfpd1_i15_xy,
+  i15_waypoint1_xy,
+  i15_waypoint2_xy
+)
+
+i15_access_network <- build_routing_graph(
+  roads_i15_access,
+  i15_access_nodes_xy,
+  "NCFPD Station 1 - I-15 and Rancho California corridor"
+)
+
+graph_i15_access_speedcap <- i15_access_network$graph
+
+# Graph 2: final approach from Sandia Creek Drive to all northern blocks.
+i15_north_nodes_xy <- rbind(
+  i15_waypoint2_xy,
+  block_xy_north
+)
+
+i15_north_network <- build_routing_graph(
+  roads_north_side,
+  i15_north_nodes_xy,
+  "NCFPD Station 1 I-15 alternative - north-side final approach"
+)
+
+graph_i15_north_speedcap <- i15_north_network$graph
 # ---------------------------------------------------------------------------
 # 15. VERIFY EDGE SPEED CAP AND SNAP DISTANCES
 # ---------------------------------------------------------------------------
@@ -2014,7 +2713,16 @@ check_graph_speeds <- function(graph, scenario_name) {
 speed_cap_validation <- bind_rows(
   check_graph_speeds(graph_normal_speedcap, "Normal access"),
   check_graph_speeds(graph_closure_prefix_speedcap, "Closure prefix"),
-  check_graph_speeds(graph_north_speedcap, "North-side-only routes")
+  check_graph_speeds(graph_north_speedcap, "North-side-only routes"),
+  check_graph_speeds(
+    graph_i15_access_speedcap,
+    "I-15 approach and corridor"
+  ),
+  
+  check_graph_speeds(
+    graph_i15_north_speedcap,
+    "I-15 north-side final approach"
+  ),
 )
 write_csv(speed_cap_validation, file.path(OUTPUT_DIR, "Speed_Cap_Edge_Validation.csv"))
 if (any(speed_cap_validation$edges_exceeding_cap > 0)) {
@@ -2062,6 +2770,80 @@ prefix_vertex_ids <- get_graph_vertex_ids(graph_closure_prefix_speedcap, prefix_
 names(prefix_vertex_ids) <- rownames(prefix_nodes_xy)
 north_vertex_ids <- get_graph_vertex_ids(graph_north_speedcap, north_nodes_xy)
 names(north_vertex_ids) <- rownames(north_nodes_xy)
+
+# ===========================================================================
+# I-15 ALTERNATIVE GRAPH VERTEX IDENTIFICATION
+# ===========================================================================
+
+i15_access_vertex_ids <- get_graph_vertex_ids(
+  graph_i15_access_speedcap,
+  i15_access_nodes_xy
+)
+
+names(i15_access_vertex_ids) <- rownames(i15_access_nodes_xy)
+
+i15_north_vertex_ids <- get_graph_vertex_ids(
+  graph_i15_north_speedcap,
+  i15_north_nodes_xy
+)
+
+names(i15_north_vertex_ids) <- rownames(i15_north_nodes_xy)
+
+# Access-network vertex IDs.
+i15_station1_id <- unname(
+  i15_access_vertex_ids["NCFPD_STATION_1_I15"]
+)
+
+i15_waypoint1_id <- unname(
+  i15_access_vertex_ids["I15_APPROACH"]
+)
+
+i15_waypoint2_access_id <- unname(
+  i15_access_vertex_ids["SANDIA_CREEK_ENTRY"]
+)
+
+# North-side final-network vertex IDs.
+i15_waypoint2_north_id <- unname(
+  i15_north_vertex_ids["SANDIA_CREEK_ENTRY"]
+)
+
+i15_block_vertex_ids <- unname(
+  i15_north_vertex_ids[paste0("BLOCK_", block_geoids_north)]
+)
+
+if (
+  is.na(i15_station1_id) ||
+  is.na(i15_waypoint1_id) ||
+  is.na(i15_waypoint2_access_id) ||
+  is.na(i15_waypoint2_north_id) ||
+  anyNA(i15_block_vertex_ids)
+) {
+  stop("One or more I-15 alternative graph vertices could not be matched.")
+}
+
+# Verify identical waypoint coordinates across the two graphs.
+i15_access_waypoint_xy <- get_vertex_xy(
+  graph_i15_access_speedcap,
+  i15_waypoint2_access_id
+)
+
+i15_north_waypoint_xy <- get_vertex_xy(
+  graph_i15_north_speedcap,
+  i15_waypoint2_north_id
+)
+
+i15_handoff_distance_m <- coord_distance_m(
+  i15_access_waypoint_xy,
+  i15_north_waypoint_xy
+)
+
+if (i15_handoff_distance_m > 2) {
+  stop(
+    "I-15 waypoint-to-north-side handoff differs by ",
+    round(i15_handoff_distance_m, 2),
+    " m."
+  )
+}
 
 # Match all continuous flooded-closure graph nodes.
 flooded_access_vertex_ids <- get_graph_vertex_ids(
@@ -2289,6 +3071,106 @@ routes_temecula_north <- calculate_fastest_routes_by_vertex_id(
   route_label = "Temecula to northern 2020 blocks (north-side roads only)"
 )
 
+# ===========================================================================
+# SCENARIO 4 - NCFPD STATION 1 I-15 / RANCHO CALIFORNIA ALTERNATIVE
+# ===========================================================================
+
+message("Calculating NCFPD Station 1 I-15 alternative routes...")
+
+# Leg 1: Station 1 -> first route waypoint.
+i15_leg1 <- calculate_single_leg(
+  graph_i15_access_speedcap,
+  i15_station1_id,
+  i15_waypoint1_id,
+  "Station 1 to I-15 approach"
+)
+
+# Leg 2: first waypoint -> Sandia Creek Drive entry.
+i15_leg2 <- calculate_single_leg(
+  graph_i15_access_speedcap,
+  i15_waypoint1_id,
+  i15_waypoint2_access_id,
+  "I-15 via Rancho California and Avenida del Oro to Sandia Creek"
+)
+
+mandatory_i15_legs <- bind_rows(
+  i15_leg1,
+  i15_leg2
+)
+
+if (
+  any(!is.finite(mandatory_i15_legs$drive_seconds)) ||
+  any(!is.finite(mandatory_i15_legs$distance_m))
+) {
+  stop(
+    "One or more mandatory I-15 route legs are unreachable. ",
+    "Review waypoint snaps and graph connectivity."
+  )
+}
+
+i15_prefix_seconds <- sum(
+  mandatory_i15_legs$drive_seconds
+)
+
+i15_prefix_distance_m <- sum(
+  mandatory_i15_legs$distance_m
+)
+
+# Leg 3: Sandia Creek Drive entry -> every northern block.
+i15_final_legs_north <- calculate_fastest_routes_by_vertex_id(
+  graph = graph_i15_north_speedcap,
+  from_id = i15_waypoint2_north_id,
+  to_ids = i15_block_vertex_ids,
+  destination_ids = paste0("BLOCK_", block_geoids_north),
+  route_label = "I-15 alternative: Sandia Creek entry to northern blocks"
+)
+
+# Add the two mandatory route legs to the destination-specific final legs.
+routes_ncfpd1_i15_north <- i15_final_legs_north %>%
+  mutate(
+    drive_seconds = drive_seconds + i15_prefix_seconds,
+    distance_m = distance_m + i15_prefix_distance_m,
+    
+    route_status = if_else(
+      is.finite(drive_seconds) & is.finite(distance_m),
+      "Reachable",
+      "Unreachable"
+    ),
+    
+    modeled_drive_min = if_else(
+      route_status == "Reachable",
+      drive_seconds / 60,
+      NA_real_
+    ),
+    
+    modeled_distance_km = if_else(
+      route_status == "Reachable",
+      distance_m / 1000,
+      NA_real_
+    ),
+    
+    modeled_distance_mi = if_else(
+      route_status == "Reachable",
+      distance_m / 1609.344,
+      NA_real_
+    ),
+    
+    implied_average_speed_kmh = if_else(
+      route_status == "Reachable" & modeled_drive_min > 0,
+      modeled_distance_km / (modeled_drive_min / 60),
+      NA_real_
+    )
+  )
+
+write_csv(
+  mandatory_i15_legs %>%
+    mutate(
+      modeled_drive_min = drive_seconds / 60,
+      modeled_distance_km = distance_m / 1000
+    ),
+  file.path(OUTPUT_DIR, "Mandatory_I15_Alternative_Legs.csv")
+)
+
 # ---------------------------------------------------------------------------
 # 21. EXTRACT AND VALIDATE THE FLOODED DETOUR GEOMETRY
 # ---------------------------------------------------------------------------
@@ -2365,6 +3247,242 @@ detour_coords <- bind_rows(
 if (nrow(detour_coords) < 2 || any(!is.finite(detour_coords))) {
   stop("The reconstructed De Luz detour contains invalid coordinates.")
 }
+
+# ===========================================================================
+# NCFPD STATION 1 I-15 ALTERNATIVE: FULL ROUTE GEOMETRY AND ROAD QA
+# ===========================================================================
+
+# Reconstruct the actual Station 1 -> waypoint 1 path.
+i15_path_leg1 <- extract_fastest_path_coordinates(
+  graph_i15_access_speedcap,
+  i15_station1_id,
+  i15_waypoint1_id
+)
+
+# Reconstruct the actual waypoint 1 -> waypoint 2 path.
+i15_path_leg2 <- extract_fastest_path_coordinates(
+  graph_i15_access_speedcap,
+  i15_waypoint1_id,
+  i15_waypoint2_access_id
+)
+
+# Validate the graph handoff between the two route legs.
+i15_leg_handoff_m <- coord_distance_m(
+  as.numeric(tail(i15_path_leg1, 1)),
+  as.numeric(head(i15_path_leg2, 1))
+)
+
+if (!is.finite(i15_leg_handoff_m) || i15_leg_handoff_m > 2) {
+  stop("I-15 alternative waypoint legs do not connect within 2 m.")
+}
+
+# ---------------------------------------------------------------------------
+# ROAD-CORRIDOR OVERLAP QA
+# ---------------------------------------------------------------------------
+
+# Measure how much of a reconstructed path follows an intended road layer.
+# A small buffer tolerates minor differences between graph and OSM geometry.
+measure_path_near_road_m <- function(
+    path_df,
+    roads_sf,
+    buffer_m = 15
+) {
+  
+  if (nrow(roads_sf) == 0) {
+    return(0)
+  }
+  
+  route_utm <- st_sfc(
+    st_linestring(
+      as.matrix(path_df %>% select(x, y))
+    ),
+    crs = 4326
+  ) %>%
+    st_transform(26911)
+  
+  roads_utm <- st_transform(roads_sf, 26911)
+  
+  road_union <- st_union(
+    st_geometry(roads_utm)
+  )
+  
+  road_buffer <- st_buffer(
+    road_union,
+    dist = buffer_m
+  )
+  
+  overlap <- suppressWarnings(
+    st_intersection(route_utm, road_buffer)
+  )
+  
+  sum(
+    as.numeric(st_length(overlap)),
+    na.rm = TRUE
+  )
+}
+
+# Measure the route between the two supplied waypoints.
+i15_stage2_road_use <- tibble(
+  intended_road = c(
+    "I-15 motorway",
+    "Rancho California Road",
+    "Avenida del Oro",
+    "Sandia Creek Drive"
+  ),
+  
+  available_osm_segments = c(
+    nrow(i15_motorway_features),
+    nrow(i15_rancho_features),
+    nrow(i15_avenida_features),
+    nrow(i15_sandia_features)
+  ),
+  
+  route_overlap_m = c(
+    measure_path_near_road_m(
+      i15_path_leg2,
+      i15_motorway_features
+    ),
+    
+    measure_path_near_road_m(
+      i15_path_leg2,
+      i15_rancho_features
+    ),
+    
+    measure_path_near_road_m(
+      i15_path_leg2,
+      i15_avenida_features
+    ),
+    
+    measure_path_near_road_m(
+      i15_path_leg2,
+      i15_sandia_features
+    )
+  ),
+  
+  minimum_required_overlap_m = c(
+    I15_MIN_MOTORWAY_OVERLAP_M,
+    I15_MIN_RANCHO_OVERLAP_M,
+    I15_MIN_AVENIDA_OVERLAP_M,
+    I15_MIN_SANDIA_OVERLAP_M
+  )
+) %>%
+  mutate(
+    route_qa_passed =
+      route_overlap_m >= minimum_required_overlap_m
+  )
+
+write_csv(
+  i15_stage2_road_use,
+  file.path(OUTPUT_DIR, "I15_Alternative_Route_Corridor_QA.csv")
+)
+
+print(i15_stage2_road_use)
+
+if (any(!i15_stage2_road_use$route_qa_passed)) {
+  stop(
+    "The route between the supplied waypoints did not follow all expected ",
+    "I-15 / Rancho California / Avenida del Oro / Sandia Creek roads. ",
+    "Review I15_Alternative_Route_Corridor_QA.csv before using the results."
+  )
+}
+
+# ---------------------------------------------------------------------------
+# BUILD THE COMPLETE SHARED I-15 ROUTE PREFIX
+# ---------------------------------------------------------------------------
+
+i15_prefix_xy <- bind_rows(
+  i15_path_leg1,
+  i15_path_leg2 %>% slice(-1)
+)
+
+if (
+  nrow(i15_prefix_xy) < 2 ||
+  any(!is.finite(as.matrix(i15_prefix_xy)))
+) {
+  stop("I-15 alternative shared route prefix contains invalid coordinates.")
+}
+
+# Verify that any portion of the prefix inside the river buffer follows
+# the retained motorway/motorway-link corridor.
+i15_prefix_utm <- st_sfc(
+  st_linestring(as.matrix(i15_prefix_xy)),
+  crs = 4326
+) %>%
+  st_transform(26911)
+
+i15_river_portion <- suppressWarnings(
+  st_intersection(
+    i15_prefix_utm,
+    river_buffer_utm
+  )
+)
+
+i15_freeway_features <- bind_rows(
+  i15_motorway_features,
+  i15_ramp_features
+)
+
+i15_freeway_union_utm <- st_union(
+  st_geometry(
+    st_transform(i15_freeway_features, 26911)
+  )
+)
+
+i15_freeway_buffer_utm <- st_buffer(
+  i15_freeway_union_utm,
+  dist = 25
+)
+
+i15_unapproved_river_portion <- suppressWarnings(
+  st_difference(
+    i15_river_portion,
+    i15_freeway_buffer_utm
+  )
+)
+
+i15_unapproved_river_length_m <- sum(
+  as.numeric(st_length(i15_unapproved_river_portion)),
+  na.rm = TRUE
+)
+
+if (i15_unapproved_river_length_m > 3) {
+  stop(
+    "The I-15 alternative route contains ",
+    round(i15_unapproved_river_length_m, 1),
+    " m of travel inside the river buffer outside the motorway corridor."
+  )
+}
+
+# ---------------------------------------------------------------------------
+# RECONSTRUCT COMPLETE ROUTES TO EVERY CENSUS BLOCK
+# ---------------------------------------------------------------------------
+
+route_lines_ncfpd1_i15_north <- make_destination_route_lines(
+  graph = graph_i15_north_speedcap,
+  from_id = i15_waypoint2_north_id,
+  destination_vertex_ids = i15_block_vertex_ids,
+  destination_geoids = block_geoids_north,
+  route_results = routes_ncfpd1_i15_north,
+  scenario_name = "NCFPD Station 1 - I-15 / Rancho California Alternative",
+  shared_prefix = i15_prefix_xy
+)
+
+if (nrow(route_lines_ncfpd1_i15_north) == 0) {
+  stop("No I-15 alternative route geometries were reconstructed.")
+}
+
+write_csv(
+  route_lines_ncfpd1_i15_north %>%
+    st_drop_geometry() %>%
+    select(
+      block_geoid_2020,
+      modeled_drive_min,
+      modeled_distance_km,
+      route_status,
+      is_longest_route
+    ),
+  file.path(OUTPUT_DIR, "I15_Alternative_Route_Line_QA.csv")
+)
 
 # ---------------------------------------------------------------------------
 # FULL FLOODED-CLOSURE DODGR ROUTES
@@ -3083,6 +4201,12 @@ block_times_temecula_north <- assemble_north_block_table(
   "Bridge Closure - Temecula Response"
 )
 
+block_times_ncfpd1_i15_north <- assemble_north_block_table(
+  routes_ncfpd1_i15_north,
+  "NCFPD Station 1",
+  "I-15 / Rancho California Alternative"
+)
+
 ncfpd1_travel_time_comparison_north <- block_times_ncfpd1_normal_north %>%
   select(
     block_geoid_2020,
@@ -3109,10 +4233,35 @@ ncfpd1_travel_time_comparison_north <- block_times_ncfpd1_normal_north %>%
   ) %>%
   arrange(desc(added_drive_min))
 
+ncfpd1_travel_time_comparison_north <-
+  ncfpd1_travel_time_comparison_north %>%
+  
+  left_join(
+    block_times_ncfpd1_i15_north %>%
+      select(
+        block_geoid_2020,
+        i15_drive_min = modeled_drive_min,
+        i15_distance_km = modeled_distance_km
+      ),
+    by = "block_geoid_2020"
+  ) %>%
+  
+  mutate(
+    i15_added_drive_min_vs_normal =
+      i15_drive_min - normal_drive_min,
+    
+    i15_added_distance_km_vs_normal =
+      i15_distance_km - normal_distance_km,
+    
+    i15_added_drive_min_vs_deluz =
+      i15_drive_min - detour_drive_min
+  )
+
 all_north_route_tables <- bind_rows(
   block_times_ncfpd1_normal_north,
   block_times_ncfpd1_deluz_north,
-  block_times_temecula_north
+  block_times_temecula_north,
+  block_times_ncfpd1_i15_north
 )
 
 scenario_summary_north <- all_north_route_tables %>%
@@ -3172,6 +4321,22 @@ detour_context_roads_wgs84 <- roads_normal_final %>%
     )
   ) %>% st_transform(4326)
 
+i15_context_roads_wgs84 <- bind_rows(
+  i15_motorway_features,
+  i15_ramp_features,
+  i15_rancho_features,
+  i15_avenida_features,
+  i15_sandia_features
+) %>%
+  distinct(osm_id, .keep_all = TRUE) %>%
+  st_transform(4326)
+
+detour_context_roads_wgs84 <- bind_rows(
+  detour_context_roads_wgs84,
+  i15_context_roads_wgs84
+) %>%
+  distinct(osm_id, .keep_all = TRUE)
+
 # Current bridge OSM line and approximate crossing point for map reference.
 current_bridge_line_wgs84 <- osm_roads %>%
   filter(osm_id == CURRENT_SANDIA_BRIDGE_OSM_ID) %>%
@@ -3220,7 +4385,9 @@ prepare_north_map_data <- function(route_table) {
 map_data_ncfpd1_normal_north <- prepare_north_map_data(block_times_ncfpd1_normal_north)
 map_data_ncfpd1_deluz_north <- prepare_north_map_data(block_times_ncfpd1_deluz_north)
 map_data_temecula_north <- prepare_north_map_data(block_times_temecula_north)
-
+map_data_ncfpd1_i15_north <- prepare_north_map_data(
+  block_times_ncfpd1_i15_north
+)
 # ---------------------------------------------------------------------------
 # 24. SHARED TIME AND DISTANCE COLOR SCALES
 # ---------------------------------------------------------------------------
@@ -3228,12 +4395,14 @@ map_data_temecula_north <- prepare_north_map_data(block_times_temecula_north)
 all_north_times <- c(
   block_times_ncfpd1_normal_north$modeled_drive_min,
   block_times_ncfpd1_deluz_north$modeled_drive_min,
-  block_times_temecula_north$modeled_drive_min
+  block_times_temecula_north$modeled_drive_min,
+  block_times_ncfpd1_i15_north$modeled_drive_min
 )
 all_north_distances <- c(
   block_times_ncfpd1_normal_north$modeled_distance_km,
   block_times_ncfpd1_deluz_north$modeled_distance_km,
-  block_times_temecula_north$modeled_distance_km
+  block_times_temecula_north$modeled_distance_km,
+  block_times_ncfpd1_i15_north$modeled_distance_km
 )
 finite_times <- all_north_times[is.finite(all_north_times)]
 finite_distances <- all_north_distances[is.finite(all_north_distances)]
@@ -3502,6 +4671,24 @@ map_north_ncfpd1_deluz_distance <- make_north_gradient_map(
   route_lines = route_lines_ncfpd1_deluz_north
 )
 
+map_north_ncfpd1_i15_time <- make_north_gradient_map(
+  map_data_ncfpd1_i15_north,
+  "NCFPD Station 1 - I-15 / Rancho California Alternative",
+  "NCFPD Station 1",
+  metric = "time",
+  show_detour = FALSE,
+  route_lines = route_lines_ncfpd1_i15_north
+)
+
+map_north_ncfpd1_i15_distance <- make_north_gradient_map(
+  map_data_ncfpd1_i15_north,
+  "NCFPD Station 1 - I-15 Alternative Distance",
+  "NCFPD Station 1",
+  metric = "distance",
+  show_detour = FALSE,
+  route_lines = route_lines_ncfpd1_i15_north
+)
+
 
 # Temecula Civic Center - Bridge closure
 map_north_temecula_time <- make_north_gradient_map(
@@ -3528,6 +4715,8 @@ print(map_north_temecula_time)
 print(map_north_ncfpd1_normal_distance)
 print(map_north_ncfpd1_deluz_distance)
 print(map_north_temecula_distance)
+print(map_north_ncfpd1_i15_time)
+print(map_north_ncfpd1_i15_distance)
 
 # ---------------------------------------------------------------------------
 # 27. EXPORT TABLES, QA, SIX MAPS, GEOPACKAGE, AND REPRODUCIBILITY RDS
@@ -3541,8 +4730,27 @@ write_csv(scenario_summary_north, file.path(OUTPUT_DIR, "Scenario_Summary_Time_a
 write_csv(route_speed_validation_north, file.path(OUTPUT_DIR, "Route_Speed_Validation_2020_North.csv"))
 write_csv(crossing_decision_audit, file.path(OUTPUT_DIR, "River_Crossing_Decisions_2020_North.csv"))
 write_csv(block_snap_review, file.path(OUTPUT_DIR, "2020_Block_Road_Access_Snap_Review.csv"))
+write_csv(
+  block_times_ncfpd1_i15_north,
+  file.path(
+    OUTPUT_DIR,
+    "Block_Times_2020_NCFPD1_I15_Alternative.csv"
+  )
+)
+
+write_csv(
+  ncfpd1_travel_time_comparison_north,
+  file.path(
+    OUTPUT_DIR,
+    "NCFPD1_Normal_DeLuz_I15_Comparison.csv"
+  )
+)
 
 map_objects <- list(
+  Arrival_Time_NCFPD1_I15_Alternative_2020_North =
+    map_north_ncfpd1_i15_time,
+  Arrival_Distance_NCFPD1_I15_Alternative_2020_North =
+    map_north_ncfpd1_i15_distance
   Arrival_Time_NCFPD1_Normal_2020_North = map_north_ncfpd1_normal_time,
   Arrival_Time_NCFPD1_Flooded_Detour_2020_North = map_north_ncfpd1_deluz_time,
   Arrival_Time_Temecula_Closure_2020_North = map_north_temecula_time,
@@ -3599,6 +4807,21 @@ st_write(
   append = TRUE,
   quiet = TRUE
 )
+st_write(
+  map_data_ncfpd1_i15_north,
+  map_gpkg,
+  layer = "NCFPD1_I15_Alternative",
+  append = TRUE,
+  quiet = TRUE
+)
+
+st_write(
+  route_lines_ncfpd1_i15_north,
+  map_gpkg,
+  layer = "NCFPD1_I15_Alternative_Route_Lines",
+  append = TRUE,
+  quiet = TRUE
+)
 
 saveRDS(
   list(
@@ -3610,6 +4833,17 @@ saveRDS(
     detour_waypoints_snapped = detour_waypoints_snapped,
     river_way_audit = river_way_audit,
     roads_normal_final = roads_normal_final,
+    roads_i15_access = roads_i15_access,
+    i15_access_network = i15_access_network,
+    i15_north_network = i15_north_network,
+    graph_i15_access_speedcap = graph_i15_access_speedcap,
+    graph_i15_north_speedcap = graph_i15_north_speedcap,
+    i15_waypoints_snapped = i15_waypoints_snapped,
+    i15_river_contact_audit = i15_river_contact_audit,
+    i15_stage2_road_use = i15_stage2_road_use,
+    i15_routes = routes_ncfpd1_i15_north,
+    i15_route_lines = route_lines_ncfpd1_i15_north,
+    i15_table = block_times_ncfpd1_i15_north
     roads_closed_prefix = roads_closed_prefix,
     roads_north_side = roads_north_side,
     graph_normal_speedcap = graph_normal_speedcap,
