@@ -4264,6 +4264,163 @@ all_north_route_tables <- bind_rows(
   block_times_ncfpd1_i15_north
 )
 
+########## CALCULATE DELTA T and Distance
+baseline_normal <- all_north_route_tables %>%
+  filter(
+    origin_name == "NCFPD Station 1",
+    scenario == "Normal Access"
+  ) %>%
+  select(
+    block_geoid_2020,
+    tract_geoid_2020,
+    historical_incident_count,
+    baseline_route_status = route_status,
+    modeled_drive_min,
+    modeled_distance_km
+  )
+
+# Verify one baseline observation per Census block.
+if (anyDuplicated(baseline_normal$block_geoid_2020)) {
+  stop("Duplicate Census blocks in the normal-access baseline.")
+}
+
+
+# Convert baseline travel metrics to long format.
+baseline_long <- baseline_normal %>%
+  pivot_longer(
+    cols = c(
+      modeled_drive_min,
+      modeled_distance_km
+    ),
+    names_to = "metric",
+    values_to = "baseline_value"
+  ) %>%
+  mutate(
+    metric = dplyr::recode(
+      metric,
+      "modeled_drive_min" = "Travel time (minutes)",
+      "modeled_distance_km" = "Travel distance (km)"
+    )
+  )
+
+
+# ---------------------------------------------------------------------------
+# ALTERNATIVE SCENARIOS
+# ---------------------------------------------------------------------------
+
+alternative_scenarios <- all_north_route_tables %>%
+  filter(
+    !(
+      origin_name == "NCFPD Station 1" &
+        scenario == "Normal Access"
+    )
+  ) %>%
+  select(
+    block_geoid_2020,
+    alternative_origin = origin_name,
+    alternative_scenario = scenario,
+    alternative_route_status = route_status,
+    modeled_drive_min,
+    modeled_distance_km
+  )
+
+# Verify one result per Census block and alternative scenario.
+duplicate_alternatives <- alternative_scenarios %>%
+  count(block_geoid_2020, alternative_scenario) %>%
+  filter(n > 1)
+
+if (nrow(duplicate_alternatives) > 0) {
+  stop("Duplicate Census block/scenario combinations found.")
+}
+
+
+# Convert alternative travel metrics to long format.
+alternatives_long <- alternative_scenarios %>%
+  pivot_longer(
+    cols = c(
+      modeled_drive_min,
+      modeled_distance_km
+    ),
+    names_to = "metric",
+    values_to = "alternative_value"
+  ) %>%
+  mutate(
+    metric = dplyr::recode(
+      metric,
+      "modeled_drive_min" = "Travel time (minutes)",
+      "modeled_distance_km" = "Travel distance (km)"
+    )
+  )
+
+# ---------------------------------------------------------------------------
+# JOIN BASELINE AND ALTERNATIVE SCENARIOS
+# ---------------------------------------------------------------------------
+
+scenario_comparison_long <- alternatives_long %>%
+  left_join(
+    baseline_long,
+    by = c(
+      "block_geoid_2020",
+      "metric"
+    )
+  ) %>%
+  mutate(
+    comparable =
+      coalesce(baseline_route_status == "Reachable", FALSE) &
+      coalesce(alternative_route_status == "Reachable", FALSE) &
+      is.finite(baseline_value) &
+      is.finite(alternative_value),
+    
+    # Difference = alternative minus normal baseline.
+    delta = if_else(
+      comparable,
+      alternative_value - baseline_value,
+      NA_real_
+    ),
+    
+    # Percent difference relative to normal access.
+    percent_delta = if_else(
+      comparable & baseline_value != 0,
+      100 * delta / baseline_value,
+      NA_real_
+    ),
+    
+    comparison = case_when(
+      !comparable ~ "Not comparable",
+      delta < 0 ~ "Lower than normal",
+      delta > 0 ~ "Higher than normal",
+      TRUE ~ "No change"
+    )
+  ) %>%
+  select(
+    block_geoid_2020,
+    tract_geoid_2020,
+    historical_incident_count,
+    alternative_origin,
+    alternative_scenario,
+    metric,
+    baseline_value,
+    alternative_value,
+    delta,
+    percent_delta,
+    baseline_route_status,
+    alternative_route_status,
+    comparison
+  ) %>%
+  arrange(
+    tract_geoid_2020,
+    block_geoid_2020,
+    alternative_scenario,
+    metric
+  )
+
+# Save the long-format comparison.
+write_csv(scenario_comparison_long, 
+          here("data",
+               "2020_Block_Travel_Time_Distance_Comparison_Long.csv"))
+
+print(scenario_comparison_long, n = 20, width = Inf)
+
 scenario_summary_north <- all_north_route_tables %>%
   group_by(scenario) %>%
   summarise(
