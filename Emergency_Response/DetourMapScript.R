@@ -5000,7 +5000,7 @@ saveRDS(
     i15_stage2_road_use = i15_stage2_road_use,
     i15_routes = routes_ncfpd1_i15_north,
     i15_route_lines = route_lines_ncfpd1_i15_north,
-    i15_table = block_times_ncfpd1_i15_north
+    i15_table = block_times_ncfpd1_i15_north,
     roads_closed_prefix = roads_closed_prefix,
     roads_north_side = roads_north_side,
     graph_normal_speedcap = graph_normal_speedcap,
