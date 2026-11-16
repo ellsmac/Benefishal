@@ -6,12 +6,21 @@ editor: visual
 theme: minty
 ---
 
+# TO DO LIST:
+
+- update parameter mortality rates for county SD and Riv
+
+- Rewrite code to calculate relative risk ratio (RR delay time/RR regular time)
+
+
 ## Load Packages
+
 ```{r}
 library(tidyverse)
 library(here)
 library(janitor)
 ```
+
 ## Load Data
 
 ```{r}
@@ -19,11 +28,13 @@ minute_comparison_original <- read_csv(here("Emergency_Response", "block_data_po
 
 colnames(minute_comparison_original)
 ```
-## Prep Data
-Reminder: $Delta = Flood - Baseline$
 
-positive Delta = Baseline is faster
-negative Delta = Detour (no bridge) is faster
+## Prep Data
+
+Reminder:  $Delta = Flood - Baseline$
+
+positive Delta = Baseline is faster negative Delta = Detour (no bridge) is faster
+
 ```{r}
 # round delta time value to the nearest whole number
 min_comp <- minute_comparison_original |>
@@ -48,22 +59,26 @@ rr <- read_csv(here("Emergency_Response", "relative_risk_v2.csv")) |>
 
 min_comp_rr <- inner_join(min_comp, rr, by = "delta_round")
 ```
+
 ## Parameter: Mortality Rates per County
+
 ```{r}
 sd_mort <- 35/100000 #REPLACE WITH REAL VALUE!!!!!
 riv_mort <- 33/100000 #REPLACE WITH REAL VALUE!!!!!
 ```
 
 ## Calculation: Per Census Block
+
 ```{r}
 # calculate the additional mortalities (count) per census block based on delay time
 mort_calc <- min_comp_rr |>
-  mutate(base_mort = population_2020*sd_mort,
-         flood_mort = population_2020*sd_mort*relative_risk,
+  mutate(base_mort = population_2020*(ifelse(county == "San Diego County", sd_mort, riv_mort)),
+         flood_mort = population_2020*(ifelse(county == "San Diego County", sd_mort, riv_mort))*relative_risk,
          add_mort = flood_mort - base_mort)
 ```
 
 ## Calculation: Total Study Area
+
 ```{r}
 # add up all values of additional mortalities (count)
 total_add_mort <- sum(mort_calc$add_mort)
@@ -72,9 +87,10 @@ print(total_add_mort)
 
 ## Calculation: Final Cost
 
-VSL: $12,594,964.20 (Source: <https://www.bls.gov/data/inflation_calculator.htm>, 7.4 mil in 2006 Dollars)
+VSL: \$12,594,964.20 (Source: <https://www.bls.gov/data/inflation_calculator.htm>, 7.4 mil in 2006 Dollars)
+
 ```{r}
 total_cost_mort <- total_add_mort*(1.68/365.25)*(12594964.20) 
 
-print(total_cost_mort, )
+print(total_cost_mort)
 ```
