@@ -54,6 +54,21 @@
 #   road-access points are representative modeled destinations, not addresses.
 # ============================================================================
 
+required_packages <- c(
+  "tidyverse", "sf", "tigris", "osmdata", "dodgr",
+  "tidygeocoder", "scales", "units"
+)
+missing_packages <- required_packages[
+  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+if (length(missing_packages) > 0) install.packages(missing_packages)
+
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(sf)
+  library(tigris)
+})
+
 # ---------------------------------------------------------------------------
 # 0. USER SETTINGS
 # ---------------------------------------------------------------------------
@@ -192,20 +207,6 @@ I15_MIN_SANDIA_OVERLAP_M <- 5
 # 1. PACKAGES, SESSION SETTINGS, INPUT DATA
 # ---------------------------------------------------------------------------
 
-required_packages <- c(
-  "tidyverse", "sf", "tigris", "osmdata", "dodgr",
-  "tidygeocoder", "scales", "units"
-)
-missing_packages <- required_packages[
-  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
-]
-if (length(missing_packages) > 0) install.packages(missing_packages)
-
-suppressPackageStartupMessages({
-  library(tidyverse)
-  library(sf)
-  library(tigris)
-})
 
 options(na.print = "NA")
 options(tigris_use_cache = TRUE)
@@ -4416,7 +4417,7 @@ scenario_comparison_long <- alternatives_long %>%
 
 # Save the long-format comparison.
 write_csv(scenario_comparison_long, 
-          here("data",
+          here("Quinn_EmergencyMapping",
                "2020_Block_Travel_Time_Distance_Comparison_Long.csv"))
 
 print(scenario_comparison_long, n = 20, width = Inf)
