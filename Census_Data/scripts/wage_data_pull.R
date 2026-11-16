@@ -37,7 +37,6 @@ income_r19 <- get_acs(
   county = "Riverside",
   year = 2019,
   geometry = FALSE)
-  #different number of observations, than 2024, why? also aren't there more block groups than 1394? what's missing from these?
 
 #pulling median individual income for SD County, 2024
 income_sd24 <- get_acs(
@@ -47,7 +46,6 @@ income_sd24 <- get_acs(
   county = "San Diego",
   year = 2024,
   geometry = FALSE)
-  #2058 observations
 
 #pulling median individual income for SD COunty, 2019
 income_sd19 <- get_acs(
@@ -57,7 +55,7 @@ income_sd19 <- get_acs(
   county = "San Diego",
   year = 2019,
   geometry = FALSE)
-  #1795 observations 
+  
 
 #####
 #match these datasets to the relevant tracts for our study area, by geoid!
@@ -77,16 +75,34 @@ sd_blocks <- sd_blocks |>
 riverside_blocks <- riverside_blocks |>
   bind_rows(t_blocks)
 
-#now need to join income to riverside_blocks dataset
-#will have to figure out how to match when geoid is longer in blocks dataset than in income
-#will also have to rename columns from income datasets so that when added to blocks it's clear what year the values are from
+#######
 
+#now to join everyone...testing with income_r24
+#have to extract tract values from income df's so that i have a key to join the tables with
 
+income_r24 <- income_r24 |>
+  mutate(tract = str_extract(NAME, "[0-9.]+(?=;)")) |>
+  relocate(tract, .after = GEOID) |>
+  mutate(tract = as.numeric(tract))
 
+#joining income_r24 to riverside_blocks so we get just the relevant rows for median income
 
+income_r24 <- income_r24 |>
+  semi_join(riverside_blocks, join_by(tract))
+  #income_r24 is now just our relevant tracts
 
+#saving cleaned median income for 2024 riverside county
+write_csv(income_r24, here("Census_data/clean_data", 
+                           "median_income_riverside_2024.csv"))
 
+#income_r19
+income_r19 <- income_r19 |>
+  mutate(tract = str_extract(NAME, "[0-9.]+(?=,)")) |>
+  mutate(tract = as.numeric(tract))
 
+#join to riverside_blocks for relevant tracts only
+income_r19 <- income_r19 |>
+  semi_join(riverside_blocks, join_by(tract))
 
 
 
