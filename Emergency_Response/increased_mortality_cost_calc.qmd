@@ -1,0 +1,47 @@
+---
+title: "Increased Mortality Cost"
+author: "Alecia Dezzani"
+format: html
+editor: visual
+theme: minty
+---
+
+## Load Packages
+```{r}
+library(tidyverse)
+library(here)
+library(janitor)
+```
+## Load Data
+
+```{r}
+minute_comparison_original <- read_csv(here("Emergency_Response", "minute_comparison.csv"))
+
+colnames(minute_comparison_original)
+```
+## Prep Data
+Reminder: $Delta = Flood - Baseline$
+
+positive Delta = Baseline is faster
+negative Delta = Detour (no bridge) is faster
+```{r}
+# round delta time value to the nearest whole number
+min_comp <- minute_comparison_original |>
+  mutate(baseline_time = round(baseline_value, digits = 0),
+         flood_time = round(alternative_value, digits = 0),
+         delta_round = round(delta, digits = 0)) |>
+#remove all census blocks where the detour (no bridge) is faster
+  filter(delta_round >= 0)
+
+range(min_comp$delta_round, na.rm = T)
+unique(min_comp$delta_round, na.rm = T)
+         
+```
+
+
+
+## Relative Risk Values
+```{r}
+
+```
+
