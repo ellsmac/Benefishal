@@ -1,0 +1,2 @@
+point_id,longitude,latitude,routing_lon,routing_lat,distance_to_road_m,nearest_road_name,nearest_road_highway,snap_method,harris_name_match
+HARRIS_TRAIL_TURN,-117.273281,33.40866,-117.27331514018802,33.40867869321265,3.7911060850030895,Harris Trail,residential,Harris-named motorcar road,TRUE

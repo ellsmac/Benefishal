@@ -1,0 +1,3 @@
+waypoint_order,waypoint_name,latitude,longitude,routing_lon,routing_lat,distance_to_road_m,nearest_road_name,nearest_road_highway
+1,I-15 approach,33.387876,-117.173591,-117.17358708187821,33.38787708414058,0.3837169230663311,NA,motorway_link
+2,Sandia Creek Drive entry,33.498885,-117.188206,-117.18818372641333,33.49888037212983,2.1315981134376427,Sandia Creek Drive,secondary

@@ -1,0 +1,5 @@
+stage,candidate_segments,nearest_distance_m,nearest_osm_id,nearest_road_name,nearest_highway,intersects_river_centerline,intersects_30m_river_buffer
+Raw OSM road layer,5,1901.933644851477,120108598,Rock Mountain Drive,residential,FALSE,FALSE
+Motorcar-filtered roads,4,1901.933644851477,120108598,Rock Mountain Drive,residential,FALSE,FALSE
+Verified roads,4,1901.933644851477,120108598,Rock Mountain Drive,residential,FALSE,FALSE
+Final north-side-only roads,4,1901.933644851477,120108598,Rock Mountain Drive,residential,FALSE,FALSE

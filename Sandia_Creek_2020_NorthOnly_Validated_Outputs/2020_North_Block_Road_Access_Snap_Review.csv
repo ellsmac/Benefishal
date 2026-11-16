@@ -1,0 +1,57 @@
+block_geoid_2020,tract_geoid_2020,distance_to_road_m,nearest_road_name,nearest_road_highway,destination_method
+060650432541022,06065043254,1117.8983446330876,Corte Carrera,unclassified,Nearest mapped north-side motorcar road
+060650432541034,06065043254,473.69802652164947,NA,track,Nearest mapped north-side motorcar road
+060650432541021,06065043254,335.4850456151967,Via Novillo,track,Nearest mapped north-side motorcar road
+060650432541026,06065043254,318.64189895794283,SD Aquaduct service track,service,Nearest mapped north-side motorcar road
+060650512003016,06065051200,289.8670023789267,Carancho Road,tertiary,Nearest mapped north-side motorcar road
+060650432541025,06065043254,271.2106982154927,Via Novillo,residential,Nearest mapped north-side motorcar road
+060650432541023,06065043254,268.25879659192066,Avenida Tierra,residential,Nearest mapped north-side motorcar road
+060730190012019,06073019001,261.58084501760726,Cinco Arroyos,residential,Block representative point snapped to nearest north-side motorcar road; Rock Mountain named-road snap did not pass the 50 m QA check
+060730190011035,06073019001,255.5432124770036,Conquistador Road,residential,Nearest mapped north-side motorcar road
+060650512003013,06065051200,250.0288647333903,Via Barranca,tertiary,Nearest mapped north-side motorcar road
+060650512001035,06065051200,243.88208756799463,Avenida del Diablo,residential,Nearest mapped north-side motorcar road
+060650432541019,06065043254,235.49233614367733,Camino Estribo,tertiary,Nearest mapped north-side motorcar road
+060730190012020,06073019001,228.98790758349134,NA,service,Nearest mapped north-side motorcar road
+060650512003023,06065051200,224.8444106655616,NA,track,Nearest mapped north-side motorcar road
+060650432541039,06065043254,216.46444381533533,NA,service,Nearest mapped north-side motorcar road
+060650512003022,06065051200,208.94659561097978,Calle Cuero,residential,Nearest mapped north-side motorcar road
+060650512003015,06065051200,199.9679312814778,Via Pino,residential,Nearest mapped north-side motorcar road
+060650512003002,06065051200,187.19543084539376,Via Santa Rosa,tertiary,Nearest mapped north-side motorcar road
+060650432541032,06065043254,187.18177649373285,Via Los Robles,residential,Nearest mapped north-side motorcar road
+060650432541027,06065043254,171.89273834327406,Via Tornado,residential,Nearest mapped north-side motorcar road
+060650512003005,06065051200,159.2194310848747,Calle Cuesta,residential,Nearest mapped north-side motorcar road
+060650512003007,06065051200,147.31854079535512,NA,track,Nearest mapped north-side motorcar road
+060730190012028,06073019001,146.64546955441588,NA,service,Nearest mapped north-side motorcar road
+060730190011036,06073019001,143.88437776345964,NA,service,Nearest mapped north-side motorcar road
+060730190011052,06073019001,142.90941501880786,Rock Mountain Drive,residential,Nearest mapped north-side motorcar road
+060730190011060,06073019001,138.61922767006217,Via de la Roca,residential,Nearest mapped north-side motorcar road
+060650432541020,06065043254,131.70902432697017,SD Aquaduct service track,service,Nearest mapped north-side motorcar road
+060650512003012,06065051200,130.79310344858317,Via Vaquero Road,tertiary,Nearest mapped north-side motorcar road
+060730190011034,06073019001,129.04157531420228,De Luz Heights Road,residential,Nearest mapped north-side motorcar road
+060650512003024,06065051200,120.91271172234377,Calle Pico,residential,Nearest mapped north-side motorcar road
+060650512001016,06065051200,115.65760471942184,NA,service,Nearest mapped north-side motorcar road
+060730190011059,06073019001,113.53605886325683,Rock Mountain Drive,residential,Nearest mapped north-side motorcar road
+060650512003006,06065051200,109.8650892272,Via Tornado,residential,Nearest mapped north-side motorcar road
+060650512003018,06065051200,108.52961805899271,Via de Los Fideos,residential,Nearest mapped north-side motorcar road
+060650432541035,06065043254,104.26169217617847,Rancho Fallbrook Road,track,Nearest mapped north-side motorcar road
+060650512003017,06065051200,85.23829464030578,Via Vaquero Road,tertiary,Nearest mapped north-side motorcar road
+060650512003014,06065051200,83.80129034935777,Sunset Terrace,residential,Nearest mapped north-side motorcar road
+060650512003001,06065051200,83.26832422380794,Camino Gatillo,residential,Nearest mapped north-side motorcar road
+060650432541024,06065043254,82.786201718906,Calle Pintoresca,residential,Nearest mapped north-side motorcar road
+060650512003025,06065051200,79.90958808066246,NA,service,Nearest mapped north-side motorcar road
+060650432541033,06065043254,78.82097478482437,Calle Cresta,residential,Nearest mapped north-side motorcar road
+060650432541038,06065043254,76.20203384438493,NA,service,Nearest mapped north-side motorcar road
+060650432541031,06065043254,68.31639688642886,Corte Carrera,unclassified,Nearest mapped north-side motorcar road
+060650512003003,06065051200,68.19673201491541,NA,service,Nearest mapped north-side motorcar road
+060650512003011,06065051200,67.6470413904145,NA,track,Nearest mapped north-side motorcar road
+060730190011053,06073019001,66.53541907098206,Rock Mountain Drive,residential,Nearest mapped north-side motorcar road
+060650512001015,06065051200,60.16693186371919,Sandia Creek Drive,secondary,Nearest mapped north-side motorcar road
+060730190011054,06073019001,57.59089389494602,NA,service,Nearest mapped north-side motorcar road
+060650512003004,06065051200,48.871474826146965,Whisper Lane,residential,Nearest mapped north-side motorcar road
+060730190011051,06073019001,47.120569932455204,NA,service,Nearest mapped north-side motorcar road
+060650512001036,06065051200,41.48020168883587,Via Barranca,tertiary,Nearest mapped north-side motorcar road
+060650512003010,06065051200,33.77778124674092,Via Santa Rosa,tertiary,Nearest mapped north-side motorcar road
+060650432541047,06065043254,27.59541324493383,East Sandia Creek Terrace,track,Nearest mapped north-side motorcar road
+060730190011058,06073019001,16.29631333703539,Little Rock Road,residential,Original Census block point (within 25 m of north-side road)
+060650432541048,06065043254,14.97434992182716,Rock Mountain Drive,residential,Original Census block point (within 25 m of north-side road)
+060730190011061,06073019001,1.406413371262378,Via el Dorado,residential,Original Census block point (within 25 m of north-side road)

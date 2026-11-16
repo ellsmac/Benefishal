@@ -1,0 +1,7 @@
+osm_id,name,ref,int_ref,highway,bridge,layer,ford,access,touches_river_centerline,crosses_river_centerline,approved_crossing,study_decision,retained_in_i15_network,decision
+5957183,De Luz Road,NA,NA,residential,NA,NA,NA,private,TRUE,TRUE,FALSE,Exclude unapproved river contact/crossing,FALSE,Excluded: river-centerline contact
+106831925,NA,NA,NA,track,NA,NA,NA,NA,TRUE,TRUE,FALSE,Exclude unverified track crossing,FALSE,Excluded: unverified crossing
+339841757,De Luz Road,NA,NA,secondary,yes,1,NA,NA,TRUE,TRUE,TRUE,Retain for De Luz detour crossing,FALSE,Excluded: De Luz bridge is not part of I-15 alternative
+441680255,NA,NA,NA,footway,NA,NA,yes,NA,TRUE,TRUE,FALSE,Exclude unapproved river contact/crossing,FALSE,Excluded: river-centerline contact
+441682044,NA,NA,NA,footway,NA,NA,yes,NA,TRUE,TRUE,FALSE,Exclude unapproved river contact/crossing,FALSE,Excluded: river-centerline contact
+847853579,Creek Drive,NA,NA,secondary,yes,1,NA,NA,TRUE,TRUE,TRUE,Retain normal; remove during closure,FALSE,Excluded: closed Sandia Creek bridge

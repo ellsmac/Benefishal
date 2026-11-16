@@ -67,13 +67,15 @@ suppressPackageStartupMessages({
   library(tidyverse)
   library(sf)
   library(tigris)
+  library(geosphere)
+  library(here)
 })
 
 # ---------------------------------------------------------------------------
 # 0. USER SETTINGS
 # ---------------------------------------------------------------------------
 
-INCIDENT_CSV_PATH <- "data/Incidents_2014_2018_flood_xy_2020blocks.csv"
+INCIDENT_CSV_PATH <- "Emergency_Response/Incidents_2014_2018_flood_xy_2020blocks.csv"
 OUTPUT_DIR <- "Sandia_Creek_2020_NorthOnly_Validated_Outputs"
 USE_CACHED_OSM <- TRUE
 
@@ -2775,7 +2777,32 @@ names(north_vertex_ids) <- rownames(north_nodes_xy)
 # ===========================================================================
 # I-15 ALTERNATIVE GRAPH VERTEX IDENTIFICATION
 # ===========================================================================
+# ===========================================================================
+# GRAPH VERTEX COORDINATE RETRIEVAL
+# ===========================================================================
 
+get_vertex_xy <- function(graph, vertex_id) {
+  
+  # Extract graph vertices
+  vertices <- dodgr::dodgr_vertices(graph)
+  
+  # Match requested vertex ID
+  vertex_match <- match(
+    as.character(vertex_id),
+    as.character(vertices$id)
+  )
+  
+  # Check that vertex exists
+  if (is.na(vertex_match)) {
+    stop("Requested vertex ID was not found in graph.")
+  }
+  
+  # Return coordinates
+  c(
+    x = vertices$x[vertex_match],
+    y = vertices$y[vertex_match]
+  )
+}
 i15_access_vertex_ids <- get_graph_vertex_ids(
   graph_i15_access_speedcap,
   i15_access_nodes_xy
@@ -2832,6 +2859,18 @@ i15_north_waypoint_xy <- get_vertex_xy(
   graph_i15_north_speedcap,
   i15_waypoint2_north_id
 )
+# ===========================================================================
+# COORDINATE DISTANCE FUNCTION
+# ===========================================================================
+
+coord_distance_m <- function(coord1, coord2) {
+  
+  geosphere::distGeo(
+    p1 = c(coord1["x"], coord1["y"]),
+    p2 = c(coord2["x"], coord2["y"])
+  )
+  
+}
 
 i15_handoff_distance_m <- coord_distance_m(
   i15_access_waypoint_xy,
@@ -3811,6 +3850,232 @@ make_destination_route_lines <- function(
 # ---------------------------------------------------------------------------
 # RECONSTRUCT THE THREE SCENARIOS
 # ---------------------------------------------------------------------------
+# ===========================================================================
+# FASTEST PATH COORDINATE EXTRACTION
+# ===========================================================================
+
+extract_fastest_path_coordinates <- function(graph, from_id, to_id) {
+  
+  graph_for_paths <- graph
+  
+  graph_for_paths$d_weighted <- graph_for_paths$time_weighted
+  
+  vertices <- dodgr::dodgr_vertices(graph_for_paths)
+  
+  path_result <- dodgr::dodgr_paths(
+    graph_for_paths,
+    from = as.character(from_id),
+    to = as.character(to_id),
+    vertices = TRUE,
+    quiet = TRUE
+  )
+  
+  path_values <- path_result[[1]][[1]]
+  
+  if (is.null(path_values) || length(path_values) < 2) {
+    stop("A required route path could not be reconstructed.")
+  }
+  
+  vertex_rows <- match(
+    as.character(path_values),
+    as.character(vertices$id)
+  )
+  
+  if (anyNA(vertex_rows)) {
+    
+    valid_indices <- is.numeric(path_values) &&
+      all(path_values == as.integer(path_values)) &&
+      all(path_values >= 1) &&
+      all(path_values <= nrow(vertices))
+    
+    if (valid_indices) {
+      vertex_rows <- as.integer(path_values)
+    } else {
+      stop(
+        "Path values could not be matched to graph vertex IDs ",
+        "or row indices."
+      )
+    }
+  }
+  
+  vertices[vertex_rows, c("x", "y"), drop = FALSE]
+}
+
+# ===========================================================================
+# RECONSTRUCT COMPLETE DESTINATION ROUTE LINES
+# ===========================================================================
+
+
+make_destination_route_lines <- function(
+    graph,
+    from_id,
+    destination_vertex_ids,
+    destination_geoids,
+    route_results,
+    scenario_name,
+    shared_prefix = NULL
+) {
+  
+  if (length(destination_vertex_ids) != length(destination_geoids)) {
+    stop("Destination vertex IDs and GEOIDs have different lengths.")
+  }
+  
+  if (!"destination_id" %in% names(route_results)) {
+    stop("route_results must contain destination_id.")
+  }
+  
+  if (is.null(shared_prefix)) {
+    shared_prefix <- NULL
+  } else {
+    shared_prefix <- as.matrix(shared_prefix)
+    
+    if (ncol(shared_prefix) != 2 ||
+        nrow(shared_prefix) < 2 ||
+        any(!is.finite(shared_prefix))) {
+      stop("Invalid shared_prefix coordinates.")
+    }
+  }
+  
+  route_output <- list()
+  unreachable_output <- character()
+  
+  for (i in seq_along(destination_geoids)) {
+    
+    geoid <- as.character(destination_geoids[i])
+    destination_id <- paste0("BLOCK_", geoid)
+    
+    result_row <- route_results %>%
+      filter(.data$destination_id == .env$destination_id)
+    
+    if (nrow(result_row) != 1) {
+      warning(
+        "Missing or duplicated route result for block ",
+        geoid, ". Skipping."
+      )
+      unreachable_output <- c(unreachable_output, geoid)
+      next
+    }
+    
+    # Identify unreachable destinations without stopping the script.
+    if (
+      result_row$route_status[1] != "Reachable" ||
+      !is.finite(result_row$modeled_drive_min[1]) ||
+      !is.finite(result_row$distance_m[1])
+    ) {
+      
+      unreachable_output <- c(unreachable_output, geoid)
+      
+      next
+    }
+    
+    # Reconstruct fastest path.
+    path_xy <- tryCatch(
+      extract_fastest_path_coordinates(
+        graph = graph,
+        from_id = from_id,
+        to_id = destination_vertex_ids[i]
+      ),
+      error = function(e) {
+        warning(
+          "Could not reconstruct route to block ",
+          geoid, ": ", conditionMessage(e)
+        )
+        NULL
+      }
+    )
+    
+    if (is.null(path_xy)) {
+      unreachable_output <- c(unreachable_output, geoid)
+      next
+    }
+    
+    path_matrix <- as.matrix(path_xy)
+    
+    # Attach shared access-network prefix.
+    if (!is.null(shared_prefix)) {
+      
+      prefix_end <- shared_prefix[nrow(shared_prefix), ]
+      
+      path_start <- path_matrix[1, ]
+      
+      handoff_distance <- coord_distance_m(
+        c(x = prefix_end[1], y = prefix_end[2]),
+        c(x = path_start[1], y = path_start[2])
+      )
+      
+      if (handoff_distance > 2) {
+        stop(
+          "Shared-prefix handoff exceeds 2 meters for block ",
+          geoid, ": ", round(handoff_distance, 3), " meters."
+        )
+      }
+      
+      path_matrix <- path_matrix[-1, , drop = FALSE]
+      
+      complete_path <- rbind(
+        shared_prefix,
+        path_matrix
+      )
+      
+    } else {
+      
+      complete_path <- path_matrix
+      
+    }
+    
+    if (nrow(complete_path) < 2 ||
+        any(!is.finite(complete_path))) {
+      
+      warning("Invalid geometry for block ", geoid, ". Skipping.")
+      
+      unreachable_output <- c(unreachable_output, geoid)
+      next
+    }
+    
+    route_output[[length(route_output) + 1]] <- sf::st_sf(
+      result_row %>%
+        mutate(
+          block_geoid_2020 = geoid,
+          scenario = scenario_name
+        ),
+      geometry = sf::st_sfc(
+        sf::st_linestring(complete_path),
+        crs = 4326
+      )
+    )
+  }
+  
+  # Combine successfully reconstructed routes.
+  if (length(route_output) > 0) {
+    
+    route_lines <- do.call(rbind, route_output)
+    
+  } else {
+    
+    route_lines <- sf::st_sf(
+      block_geoid_2020 = character(),
+      scenario = character(),
+      geometry = sf::st_sfc(crs = 4326)
+    )
+    
+  }
+  
+  # Preserve unreachable destination information.
+  attr(route_lines, "unreachable_blocks") <-
+    unique(unreachable_output)
+  
+  message(
+    scenario_name,
+    ": ",
+    nrow(route_lines),
+    " routes reconstructed; ",
+    length(unique(unreachable_output)),
+    " destinations skipped."
+  )
+  
+  return(route_lines)
+}
+
 
 # Scenario 1: NCFPD Station 1 normal access.
 route_lines_ncfpd1_normal_north <- make_destination_route_lines(
@@ -3837,9 +4102,7 @@ route_lines_ncfpd1_deluz_north <- make_destination_route_lines(
   destination_geoids = block_geoids_north,
   route_results = routes_ncfpd1_deluz_north,
   scenario_name = "NCFPD Station 1 - Flooded De Luz Detour",
-  shared_prefix = detour_coords,
-  check_north_only = TRUE
-)
+  shared_prefix = detour_coords)
 
 
 # Scenario 3: Temecula Civic Center during bridge closure.
@@ -3868,7 +4131,17 @@ message(
 # ---------------------------------------------------------------------------
 # ISOLATE THE PURPLE (LONGEST) ROUTE AND TEST FOR FORCED BACKTRACKING
 # ---------------------------------------------------------------------------
-
+library(lwgeom)
+route_lines_ncfpd1_deluz_north <- route_lines_ncfpd1_deluz_north %>%
+  mutate(
+    route_length_m = as.numeric(
+      sf::st_length(geometry)
+    ),
+    is_longest_route = route_length_m == max(
+      route_length_m,
+      na.rm = TRUE
+    )
+  )
 # Identify the destination represented by the purple line.
 suspect_route <- route_lines_ncfpd1_deluz_north %>%
   filter(is_longest_route)
@@ -3955,180 +4228,6 @@ suspect_route_comparison <- tibble(
 
 print(suspect_route_comparison)
 
-#21 alternate routing test
-
-# ---------------------------------------------------------------------------
-# RECONSTRUCT BOTH COMPLETE ROUTES TO THE SUSPECT BLOCK
-# ---------------------------------------------------------------------------
-
-# Current route: Station 1 -> De Luz -> Camaron -> Rock Mountain -> block.
-current_final_path <- extract_fastest_path_coordinates(
-  graph_north_speedcap,
-  north_rock_id,
-  suspect_vertex_id
-)
-
-detour_prefix_df <- tibble(
-  x = detour_coords[, 1],
-  y = detour_coords[, 2]
-)
-
-current_full_route_xy <- bind_rows(
-  detour_prefix_df,
-  current_final_path %>% slice(-1)
-)
-
-# Alternative: Station 1 -> De Luz -> fastest north-side route -> block.
-alternative_final_path <- extract_fastest_path_coordinates(
-  graph_north_speedcap,
-  north_de_luz_id,
-  suspect_vertex_id
-)
-
-# Verify that the prefix and alternative final leg join.
-alternative_handoff_m <- coord_distance_m(
-  c(tail(path_leg1$x, 1), tail(path_leg1$y, 1)),
-  c(alternative_final_path$x[1], alternative_final_path$y[1])
-)
-
-if (alternative_handoff_m > 2) {
-  stop("Alternative route does not connect properly at the De Luz handoff.")
-}
-
-alternative_full_route_xy <- bind_rows(
-  path_leg1,
-  alternative_final_path %>% slice(-1)
-)
-
-# Verify the alternative north-side final leg avoids the river buffer.
-alternative_final_utm <- st_sfc(
-  st_linestring(as.matrix(alternative_final_path)),
-  crs = 4326
-) %>%
-  st_transform(26911)
-
-if (lengths(st_intersects(alternative_final_utm, river_buffer_utm)) > 0) {
-  stop("Alternative De Luz-to-block route intersects the river buffer.")
-}
-
-# Create a two-feature route layer.
-suspect_route_comparison_sf <- st_sf(
-  route_strategy = c(
-    "Current: mandatory Rock Mountain waypoint",
-    "Alternative: direct north-side routing after De Luz"
-  ),
-  
-  block_geoid_2020 = suspect_block_geoid,
-  
-  geometry = st_sfc(
-    st_linestring(as.matrix(current_full_route_xy)),
-    st_linestring(as.matrix(alternative_full_route_xy)),
-    crs = 4326
-  )
-)
-
-# Highlight the destination block.
-suspect_block_geom <- yellow_blocks_map_base_north %>%
-  filter(block_geoid_2020 == suspect_block_geoid)
-
-if (nrow(suspect_block_geom) != 1) {
-  stop("Could not identify exactly one suspect Census block polygon.")
-}
-
-# Plot all road context and both complete routes.
-suspect_route_map <- ggplot() +
-  
-  geom_sf(
-    data = roads_normal_final %>% st_transform(4326),
-    color = "grey78",
-    linewidth = 0.25
-  ) +
-  
-  geom_sf(
-    data = river_map_wgs84,
-    color = "deepskyblue3",
-    linewidth = 1.0
-  ) +
-  
-  geom_sf(
-    data = yellow_blocks_map_base_north,
-    fill = NA,
-    color = "grey65",
-    linewidth = 0.2
-  ) +
-  
-  geom_sf(
-    data = suspect_block_geom,
-    fill = "#F5E65B",
-    color = "black",
-    linewidth = 0.9
-  ) +
-  
-  geom_sf(
-    data = suspect_route_comparison_sf,
-    aes(color = route_strategy),
-    linewidth = 1.15,
-    alpha = 0.95
-  ) +
-  
-  geom_sf(
-    data = detour_stop_points_wgs84,
-    color = "black",
-    fill = "white",
-    shape = 21,
-    size = 2.5
-  ) +
-  
-  scale_color_manual(
-    values = c(
-      "Current: mandatory Rock Mountain waypoint" = "#7B1FA2",
-      "Alternative: direct north-side routing after De Luz" = "#0072B2"
-    )
-  ) +
-  
-  coord_sf(
-    crs = st_crs(4326),
-    default_crs = st_crs(4326),
-    xlim = unname(c(
-      MAP_EXTENT_WGS84["xmin"],
-      MAP_EXTENT_WGS84["xmax"]
-    )),
-    ylim = unname(c(
-      MAP_EXTENT_WGS84["ymin"],
-      MAP_EXTENT_WGS84["ymax"]
-    )),
-    expand = FALSE
-  ) +
-  
-  labs(
-    title = "Full Route Comparison - Suspect 2020 Census Block",
-    subtitle = paste("Block GEOID:", suspect_block_geoid),
-    color = "Routing strategy",
-    x = "Longitude",
-    y = "Latitude"
-  ) +
-  
-  theme_bw() +
-  
-  theme(
-    plot.title = element_text(face = "bold", size = 14),
-    legend.position = "bottom"
-  )
-
-print(suspect_route_map)
-
-ggsave(
-  file.path(OUTPUT_DIR, "Suspect_Block_Full_Route_Comparison.png"),
-  suspect_route_map,
-  width = 13,
-  height = 10,
-  dpi = 300
-)
-
-write_csv(
-  suspect_route_comparison,
-  file.path(OUTPUT_DIR, "Suspect_Block_Route_Comparison.csv")
-)
 # ---------------------------------------------------------------------------
 # 22. ASSEMBLE NORTHERN 2020 BLOCK TIME/DISTANCE TABLES
 # ---------------------------------------------------------------------------
@@ -4455,6 +4554,10 @@ if (any(route_speed_validation_north$routes_over_cap > 0)) {
 # ---------------------------------------------------------------------------
 # 23. PREPARE MAP INPUTS - ALL GEOMETRIES IN WGS84
 # ---------------------------------------------------------------------------
+flooded_detour_route_north <- st_sf(
+  route_name = "Flooded Detour Route: Station 1 -> De Luz -> Camaron -> Rock Mountain",
+  geometry = st_sfc(st_linestring(detour_coords), crs = 4326)
+)
 
 yellow_blocks_map_base_north <- yellow_blocks_north %>% st_transform(4326)
 
@@ -4731,33 +4834,50 @@ make_north_gradient_map <- function(
   if (!is.null(route_lines) && nrow(route_lines) > 0) {
     
     # All modeled routes: thin, partially transparent charcoal lines.
-    p <- p +
-      geom_sf(
-        data = route_lines,
-        color = "grey15",
-        linewidth = 0.30,
-        alpha = 0.30,
-        inherit.aes = FALSE
-      ) +
+    if (!is.null(route_lines) && nrow(route_lines) > 0) {
       
-      # Highlight the destination with the longest modeled drive time.
-      geom_sf(
-        data = route_lines %>% filter(is_longest_route),
-        color = "#7B1FA2",
-        linewidth = 1.05,
-        alpha = 1,
-        inherit.aes = FALSE
-      ) +
+      # Identify the longest reconstructed route if not already identified
+      if (!"is_longest_route" %in% names(route_lines)) {
+        
+        route_lines <- route_lines %>%
+          mutate(
+            route_length_m = as.numeric(sf::st_length(geometry)),
+            is_longest_route = route_length_m == max(
+              route_length_m,
+              na.rm = TRUE
+            )
+          )
+        
+      }
       
-      # Re-draw the active origin so it remains visible over the routes.
-      geom_sf(
-        data = active_origin,
-        color = "black",
-        shape = 8,
-        size = 5.2,
-        stroke = 1.5,
-        inherit.aes = FALSE
-      )
+      # Draw all routes
+      p <- p +
+        geom_sf(
+          data = route_lines,
+          color = "grey15",
+          linewidth = 0.3,
+          alpha = 0.3,
+          inherit.aes = FALSE
+        ) +
+        
+        # Highlight the longest route in purple
+        geom_sf(
+          data = route_lines %>% filter(is_longest_route),
+          color = "#7B1FA2",
+          linewidth = 1.05,
+          alpha = 1,
+          inherit.aes = FALSE
+        ) +
+        
+        geom_sf(
+          data = active_origin,
+          color = "black",
+          shape = 8,
+          size = 5.2,
+          stroke = 1.5,
+          inherit.aes = FALSE
+        )
+    }
   }
   if (show_detour) {
     p <- p +
@@ -4811,6 +4931,16 @@ map_north_ncfpd1_normal_distance <- make_north_gradient_map(
 
 
 # NCFPD Station 1 - Flooded De Luz detour
+
+#DETOUR PATCH
+detour_stop_points_wgs84 <- detour_waypoints_snapped %>%
+  arrange(stop_order) %>%
+  sf::st_as_sf(
+    coords = c("routing_lon", "routing_lat"),
+    crs = 4326,
+    remove = FALSE
+  )
+
 map_north_ncfpd1_deluz_time <- make_north_gradient_map(
   map_data_ncfpd1_deluz_north,
   "NCFPD Station 1 - Flooded De Luz Detour",
@@ -4908,7 +5038,7 @@ map_objects <- list(
   Arrival_Time_NCFPD1_I15_Alternative_2020_North =
     map_north_ncfpd1_i15_time,
   Arrival_Distance_NCFPD1_I15_Alternative_2020_North =
-    map_north_ncfpd1_i15_distance
+    map_north_ncfpd1_i15_distance,
   Arrival_Time_NCFPD1_Normal_2020_North = map_north_ncfpd1_normal_time,
   Arrival_Time_NCFPD1_Flooded_Detour_2020_North = map_north_ncfpd1_deluz_time,
   Arrival_Time_Temecula_Closure_2020_North = map_north_temecula_time,

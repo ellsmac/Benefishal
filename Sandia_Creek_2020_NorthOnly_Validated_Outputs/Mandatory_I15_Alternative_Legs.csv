@@ -1,0 +1,3 @@
+destination_id,drive_seconds,distance_m,route_status,modeled_drive_min,modeled_distance_km,modeled_distance_mi,implied_average_speed_kmh,route_leg
+Station 1 to I-15 approach,531.7669392494005,8112.203818229908,Reachable,8.86278232082334,8.112203818229908,5.040689758205771,54.91867130147203,Station 1 to I-15 approach
+I-15 via Rancho California and Avenida del Oro to Sandia Creek,1197.1482494471068,18722.068456631125,Reachable,19.952470824118446,18.722068456631124,11.633353998045864,56.29999999999995,I-15 via Rancho California and Avenida del Oro to Sandia Creek

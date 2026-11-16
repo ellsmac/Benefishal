@@ -1,0 +1,4 @@
+osm_id,feature,in_normal_network,in_closure_prefix
+106831925,Unverified track crossing,FALSE,FALSE
+339841757,De Luz Road bridge,TRUE,TRUE
+847853579,Current Sandia Creek Drive bridge,TRUE,FALSE

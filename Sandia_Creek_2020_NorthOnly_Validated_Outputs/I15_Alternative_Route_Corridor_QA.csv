@@ -1,0 +1,5 @@
+intended_road,available_osm_segments,route_overlap_m,minimum_required_overlap_m,route_qa_passed
+I-15 motorway,65,13315.20082592501,1000,TRUE
+Rancho California Road,70,4317.936929328593,100,TRUE
+Avenida del Oro,4,497.27248130873073,15,TRUE
+Sandia Creek Drive,7,66.82636763474498,5,TRUE
