@@ -15,6 +15,8 @@ library(tidyverse)
 #loading variables for use
 vars<- load_variables(2019, "acs1", cache = TRUE)
 view(vars)
+  #in the data i saved, I used variable B07011_001, "Median Income in the Past 12 Months (in 2024 Inflation-Adjusted Dollars) by Geographical Mobility in the Past Year for Current Residence in the United States"
+  #but how does that compare to variable B06011_001, "Median Income in the Past 12 Months (in 2024 Inflation-Adjusted Dollars) by Place of Birth in the United States"
 
 vars_decennial <- load_variables(2020, "pl")
 view(vars_decennial)
@@ -28,6 +30,22 @@ income_r24 <- get_acs(
   year = 2024,
   geometry = FALSE)
   #this invidual income only goes to tract level... great
+
+#checking if B06011_001 and B07011_001 are the same or not
+income_r24_B06 <- get_acs(
+  geography = "tract",
+  variables = "B06011_001",
+  state = "CA",
+  county = "Riverside",
+  year = 2024,
+  geometry = FALSE)
+  #making a df with the B06011_001 data
+
+all.equal(income_r24, income_r24_B06)
+  #[1] "Component “variable”: 518 string mismatches"
+  # this is telling me the only mismatch between my df's is the "variable" column
+  # everything else is exactly the same, which means I can keep the csv's i saved
+  # bc using variable B07011_001 pulls the exact same values as using variable B06011_001!
 
 #pulling median individual income for Riverside County, 2019
 income_r19 <- get_acs(
@@ -163,14 +181,26 @@ income_sd19 <- income_sd19 |>
     write_csv(income_sd19, here("Census_data/clean_data", 
                                 "median_income_sd_2019.csv"))
     
+###################
+#pulling working hour estimates
+    
+#loading variables for use
+vars<- load_variables(2024, "acs1", cache = TRUE)
+view(vars)    
+  #going to use "B99233_001", the "Allocation of Usual Hours Worked per Week in the Past 12 Months for the Population 16 Years and Over"
+  #explanatory census data info, access here: https://www2.census.gov/programs-surveys/acs/tech_docs/subject_definitions/2024_ACSSubjectDefinitions.pdf
+  #tells us that allocation involves using statistical methods to account for missing values
+  #so this should give us a best estimate of weekly work hours to use in our cals!
 
 
-
-
-
-
-
-
-
-
-
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
