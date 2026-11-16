@@ -314,7 +314,17 @@ hrs_weekly_sd19 <- hrs_weekly_sd19 |>
 write_csv(hrs_weekly_sd19, here("Census_data/clean_data", 
                                    "mean_workhrs_sd_2019.csv"))   
 
+#################
+#pulling average weeks worked per year
+#options are variables under B99234, which are variations on "Allocation of Weeks Worked in the Past 12 Months for the Population 16 Years and Over"
 
+weeks_r24 <- get_acs(
+  geography = "tract",
+  variables = "B99234_001",
+  state = "CA",
+  county = "Riverside",
+  year = 2024,
+  geometry = FALSE)
 
 
 
