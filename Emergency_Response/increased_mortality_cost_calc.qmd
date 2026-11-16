@@ -40,7 +40,7 @@ unique(min_comp$delta_round, na.rm = T)
 
 ## Parameter: Relative Risk Values
 
-11/14/26 AD: RR values calculated from AORs in Lee et al. (2021) (<https://doi.org/10.1016/j.ajem.2020.12.019>)
+11/14/26 AD: RR values calculated from AORs in Waalwijk et al. (2022) (<https://doi.org/10.1097/TA.0000000000003380>)
 
 ```{r}
 rr <- read_csv(here("Emergency_Response", "relative_risk_v2.csv")) |>
