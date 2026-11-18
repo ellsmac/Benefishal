@@ -18,6 +18,7 @@ library(janitor)
 #link to 2024 driving costs pdf: https://drive.google.com/file/d/1HYrH3CqqtsA82lBg-5NBwUbYS3TjcBzR/view?usp=share_link
 #link to 2019 driving costs pdf: https://drive.google.com/file/d/1Ry1Vt1gKI2hQ3yoO9UV2l2nyCRWAlvEF/view?usp=share_link
 
+#gathering/cleaning 2024 data
 op_cost_24 <- tibble(
   cost_type = c("fuel", "maintenance"),
   usd_24 = c(0.149, 0.1013)  
@@ -30,4 +31,36 @@ op_cost_24 <- op_cost_24 |>
 
 write_csv(op_cost_24, here("Detour_cost/clean_data",
                            "AAA_2024_vehicle_op_cost.csv"))
+
+
+#gathering/cleaning 2019 data
+op_cost_19 <- tibble(
+  cost_type = c("fuel", "maintenance"),
+  usd_19 = c(0.1160, 0.0894)
+)
+
+op_cost_19 <- op_cost_19 |>
+  add_row(cost_type = "total", usd_19 = sum(op_cost_19$usd_19))
+
+#now to adjust for inflation...
+#going to do it by hand, using using CPI Inflation Calculator from the US Bureau of Labor Stats: https://www.bls.gov/data/inflation_calculator.htm
+#using January 2019 and January 2024 as the months, just like for adjusting income
+
+op_cost_19 <- op_cost_19 |>
+  add_column(usd_24 = c(0.14, 0.11, 0.25))
+
+#saving 2019 vehicle operation costs
+#saving 2024 vehicle operation costs
+
+write_csv(op_cost_19, here("Detour_cost/clean_data",
+                           "AAA_2019_vehicle_op_cost.csv"))
+
+
+
+
+
+
+
+
+
 
