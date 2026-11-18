@@ -10,7 +10,7 @@ theme: minty
 
 - verify which blocks are in/out
 
-- update parameter mortality rates for county SD and Riv
+- update parameter mortality rates for county SD and Riv.... should they be the same?
 
 - Rewrite code to calculate relative risk ratio (RR delay time/RR regular time)
 
@@ -62,7 +62,7 @@ unique(min_comp$delta_round, na.rm = T)
 11/14/26 AD: RR values calculated from AORs in Waalwijk et al. (2022) (<https://doi.org/10.1097/TA.0000000000003380>)
 
 ```{r}
-rr <- read_csv(here("Emergency_Response", "relative_risk_v2.csv")) |>
+rr <- read_csv(here("Emergency_Response", "relative_risk.csv")) |>
   mutate(delta_round = response_time_min)
 
 min_comp_rr <- inner_join(min_comp, rr, by = "delta_round")
@@ -79,6 +79,7 @@ riv_mort <- 33/100000 #REPLACE WITH REAL VALUE!!!!!
 
 ```{r}
 # calculate the additional mortalities (count) per census block based on delay time
+
 mort_calc <- min_comp_rr |>
   mutate(base_mort = population_2020*(ifelse(county == "San Diego County", sd_mort, riv_mort)),
          flood_mort = population_2020*(ifelse(county == "San Diego County", sd_mort, riv_mort))*relative_risk,
