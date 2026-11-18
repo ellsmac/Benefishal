@@ -1,8 +1,10 @@
 # Author: E MacLean
 # Created: Nov 16, 2026
-# Modified: None
+# Modified: Nov 18, 2026
 ##################
 #purpose of this script is to calculate average hourly wage for detour cost calculations
+#Nov 18 edit: it's not actually an hourly wage but an hourly income, as we're working with an 
+#annual income value, which isn't the same as a wage
 
 #clear enviro
 rm(list = ls())
@@ -122,7 +124,7 @@ income_r19 <- income_r19 |>
 income_r19 <- income_r19 |>
   mutate(med_hourly_income = med_income/mean_hrs_yr)
 
-#now still need to ajdust all those values for inflation into 2024 dollars
+#now still need to adjust all those values for inflation into 2024 dollars
 
 
 
@@ -161,6 +163,44 @@ adjusted_hrly_income <- tibble(
 
 income_sd19 <- income_sd19 |>
   left_join(adjusted_hrly_income, join_by(tract))
+
+#figuring out the CPI inflation rate based on above
+#can divide new by old to determine the factor by which 2019 values were multiplied
+
+income_sd19 <- income_sd19 |>
+mutate(cpi_factor = med_hourly_income_adj / med_hourly_income) 
+  #all variations on the same theme, let's take the average
+  #and apply it to the riverside 2019 dataset!
+
+mean(income_sd19$cpi_factor)
+  #1.225316
+  #will be our inflation adjustment rate for Riverside 2019 data
+
+
+#adjusting Riverside 2019 hourly income to 2024 dollars
+
+income_r19 <- income_r19 |>
+  mutate(med_hourly_income_adj = med_hourly_income * 1.225316)
+
+
+#saving new cleaned data!
+
+write_csv(income_r24, here("Census_Data/clean_data", 
+                           "hourly_income_riverside_2024.csv"))
+write_csv(income_r19, here("Census_Data/clean_data",
+                           "hourly_income_riverside_2019.csv"))
+write_csv(income_sd24, here("Census_Data/clean_data",
+                            "hourly_income_sd_2024.csv"))
+write_csv(income_sd19, here("Census_Data/clean_data",
+                            "hourly_income_sd_2019.csv"))
+
+
+
+
+
+
+
+
 
 
 
