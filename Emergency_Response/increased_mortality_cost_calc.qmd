@@ -8,6 +8,8 @@ theme: minty
 
 # TO DO LIST:
 
+- verify which blocks are in/out
+
 - update parameter mortality rates for county SD and Riv
 
 - Rewrite code to calculate relative risk ratio (RR delay time/RR regular time)
@@ -16,6 +18,9 @@ theme: minty
 ## Load Packages
 
 ```{r}
+#| echo: false
+#| message: false
+
 library(tidyverse)
 library(here)
 library(janitor)
@@ -31,18 +36,21 @@ colnames(minute_comparison_original)
 
 ## Prep Data
 
-Reminder:  $Delta = Flood - Baseline$
+Reminder: $Delta = Flood - Baseline$
 
 positive Delta = Baseline is faster negative Delta = Detour (no bridge) is faster
 
 ```{r}
 # round delta time value to the nearest whole number
 min_comp <- minute_comparison_original |>
+  filter(metric == "Travel time (minutes)") |>
   mutate(baseline_time = round(baseline_value, digits = 0),
          flood_time = round(alternative_value, digits = 0),
          delta_round = round(delta, digits = 0)) |>
-#remove all census blocks where the detour (no bridge) is faster
-  filter(delta_round >= 0)
+  group_by(block_geoid_2020) |>
+  slice_min(alternative_value, n = 1, with_ties = FALSE) %>%
+  ungroup() |>
+  filter(delta >= 0)
 
 range(min_comp$delta_round, na.rm = T)
 unique(min_comp$delta_round, na.rm = T)
