@@ -14,7 +14,6 @@ theme: minty
 
 - Rewrite code to calculate relative risk ratio (RR delay time/RR regular time)
 
-
 ## Load Packages
 
 ```{r}
@@ -62,15 +61,26 @@ unique(min_comp$delta_round, na.rm = T)
 11/14/26 AD: RR values calculated from AORs in Waalwijk et al. (2022) (<https://doi.org/10.1097/TA.0000000000003380>)
 
 ```{r}
-rr <- read_csv(here("Emergency_Response", "relative_risk.csv")) |>
-  mutate(delta_round = response_time_min)
+#rr <- read_csv(here("Emergency_Response", "relative_risk.csv")) |>
+#  mutate(delta_round = response_time_min)
 
-min_comp_rr <- inner_join(min_comp, rr, by = "delta_round")
+#min_comp_rr <- inner_join(min_comp, rr, by = "delta_round")
+
+rr <- read_csv(here("Emergency_Response", "relative_risk.csv")) %>% 
+  select(response_time_min,relative_risk_ratio)
+
+min_comp_rr <- min_comp %>%
+  left_join(rr,by = c("baseline_time" = "response_time_min")) %>%
+  rename(rr_baseline = relative_risk_ratio) %>%
+  left_join(rr,by = c("flood_time" = "response_time_min")) %>%
+  rename(rr_flood = relative_risk_ratio) %>% 
+  mutate(rr_ratio = rr_flood/rr_baseline)
 ```
 
 ## Parameter: Mortality Rates per County
 
 ```{r}
+
 sd_mort <- 35/100000 #REPLACE WITH REAL VALUE!!!!!
 riv_mort <- 33/100000 #REPLACE WITH REAL VALUE!!!!!
 ```
@@ -80,10 +90,25 @@ riv_mort <- 33/100000 #REPLACE WITH REAL VALUE!!!!!
 ```{r}
 # calculate the additional mortalities (count) per census block based on delay time
 
-mort_calc <- min_comp_rr |>
-  mutate(base_mort = population_2020*(ifelse(county == "San Diego County", sd_mort, riv_mort)),
-         flood_mort = population_2020*(ifelse(county == "San Diego County", sd_mort, riv_mort))*relative_risk,
-         add_mort = flood_mort - base_mort)
+#mort_calc <- min_comp_rr |>
+#  mutate(base_mort = population_2020*(ifelse(county == "San Diego County", sd_mort, riv_mort)),
+#         flood_mort = population_2020*(ifelse(county == "San Diego County", sd_mort, riv_mort))*relative_risk,
+#         add_mort = flood_mort - base_mort)
+
+df_cardiac<-read_csv(here("Emergency_Response/mortality_incident_calculation/estimated_cardiac_admits.csv"))
+survial_to_er <- 0.253
+survival_to_discharge <- 0.105
+
+df_cardiac <- mutate(df_cardiac,EstimatedAnnualCardiacDeaths = (cardiac_admits_2024+cardiac_admits_2025)/(2*survial_to_er)*(1-survival_to_discharge)) %>% 
+  select(geoid,EstimatedAnnualCardiacDeaths,popultn)
+
+print(sum(df_cardiac$EstimatedAnnualCardiacDeaths)/sum(df_cardiac$popultn))
+#Should be around 0.1%
+
+mort_calc <- min_comp_rr %>% 
+  left_join(df_cardiac,by = c("block_geoid_2020" = "geoid")) %>% 
+  mutate(add_mort = rr_ratio*EstimatedAnnualCardiacDeaths) %>% 
+  select(block_geoid_2020,add_mort)
 ```
 
 ## Calculation: Total Study Area
