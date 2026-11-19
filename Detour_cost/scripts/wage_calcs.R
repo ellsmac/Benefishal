@@ -15,28 +15,28 @@ library(here)
 library(janitor)
 
 #load data
-income_r24 <- read_csv(here("Census_data/clean_data", 
+income_r24 <- read_csv(here("Census_data/raw_data", 
                             "median_income_riverside_2024.csv"))
 
-income_r19 <- read_csv(here("Census_data/clean_data", 
+income_r19 <- read_csv(here("Census_data/raw_data", 
                             "median_income_riverside_2019.csv"))
 
-income_sd24 <- read_csv(here("Census_data/clean_data", 
+income_sd24 <- read_csv(here("Census_data/raw_data", 
                              "median_income_sd_2024.csv"))
 
-income_sd19 <- read_csv(here("Census_data/clean_data", 
+income_sd19 <- read_csv(here("Census_data/raw_data", 
                              "median_income_sd_2019.csv"))
 
-hrs_r24 <- read_csv(here("Census_data/clean_data", 
+hrs_r24 <- read_csv(here("Census_data/raw_data", 
                          "mean_workhrs_riverside_2024.csv"))
 
-hrs_r19 <- read_csv(here("Census_data/clean_data", 
+hrs_r19 <- read_csv(here("Census_data/raw_data", 
                          "mean_workhrs_riverside_2019.csv"))
 
-hrs_sd24 <- read_csv(here("Census_data/clean_data", 
+hrs_sd24 <- read_csv(here("Census_data/raw_data", 
                           "mean_workhrs_sd_2024.csv"))
 
-hrs_sd19 <- read_csv(here("Census_data/clean_data", 
+hrs_sd19 <- read_csv(here("Census_data/raw_data", 
                           "mean_workhrs_sd_2019.csv"))
 
 #calculating income per hour
@@ -185,13 +185,13 @@ income_r19 <- income_r19 |>
 
 #saving new cleaned data!
 
-write_csv(income_r24, here("Census_Data/clean_data", 
-                           "hourly_income_riverside_2024.csv"))
-write_csv(income_r19, here("Census_Data/clean_data",
-                           "hourly_income_riverside_2019.csv"))
-write_csv(income_sd24, here("Census_Data/clean_data",
-                            "hourly_income_sd_2024.csv"))
-write_csv(income_sd19, here("Census_Data/clean_data",
+#write_csv(income_r24, here("Census_Data/clean_data", 
+                   #        "hourly_income_riverside_2024.csv"))
+#write_csv(income_r19, here("Census_Data/clean_data",
+                   #        "hourly_income_riverside_2019.csv"))
+#write_csv(income_sd24, here("Census_Data/clean_data",
+                   #         "hourly_income_sd_2024.csv"))
+#write_csv(income_sd19, here("Census_Data/clean_data",
                             "hourly_income_sd_2019.csv"))
 
 
