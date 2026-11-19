@@ -6,23 +6,20 @@ editor: visual
 theme: minty
 ---
 
-# TO DO LIST:
 
+::: {.callout-important title = "To Do"}
 - verify which blocks are in/out
 
 - add all possible origin points
 
 - update parameter mortality rates for county SD and Riv.... should they be the same?
 
-<<<<<<< HEAD
-=======
 - Rewrite code to calculate relative risk ratio (RR delay time/RR regular time)
+:::
 
->>>>>>> a7c30a164b38f6cfcf8a0466be9cb8043017ee33
 ## Load Packages
 
 ```{r}
-#| echo: false
 #| message: false
 
 library(tidyverse)
@@ -42,7 +39,9 @@ colnames(minute_comparison_original)
 
 Reminder: $Delta = Flood - Baseline$
 
-positive Delta = Baseline is faster negative Delta = Detour (no bridge) is faster
+- positive Delta = Baseline is faster 
+
+- negative Delta = Detour (no bridge) is faster
 
 ```{r}
 # round delta time value to the nearest whole number
