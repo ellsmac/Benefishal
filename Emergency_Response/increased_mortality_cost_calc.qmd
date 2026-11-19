@@ -10,10 +10,9 @@ theme: minty
 
 - verify which blocks are in/out
 
+- add all possible origin points
+
 - update parameter mortality rates for county SD and Riv.... should they be the same?
-
-- Rewrite code to calculate relative risk ratio (RR delay time/RR regular time)
-
 
 ## Load Packages
 
