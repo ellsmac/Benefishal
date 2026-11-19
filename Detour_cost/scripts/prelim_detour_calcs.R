@@ -39,7 +39,14 @@ voc_24 <- read_csv(here("Detour_cost/clean_data",
 traffic <- read_csv(here("traffic_study_data",
                        "traffic_data.csv")) #this is both years combined and cleaned!
 
+#calculations...
 
+  #original proposal was for this equation: 
+  #total cost per year = volume of traffic per day * distance traveled * cost of travel/mile * 365
+  #but we have to do...
+  #avg volume of traffic per day * distance traveled * VOC * time traveled * avg hourly income * 365
+    #above calc also assumes cars have one person in them only, but Cal B/C uses an average vehicle occupancy number
+    #that is 1.3 people per car in non-peak general traffic, and 1.15 for general traffic! up to us if we want to use
 
 
 
