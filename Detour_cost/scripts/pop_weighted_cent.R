@@ -9,6 +9,7 @@ library(sf)
 library(dplyr)
 library(mapview)
 library(osrm)
+library(readr) 
 
 options(tigris_use_cache = TRUE)
 
@@ -17,26 +18,6 @@ study_bg <- block_group2020 |>
   filter(STATEFP == "06", COUNTYFP %in% c("073", "065")) |>  # San Diego, Riverside
   mutate(GEOID = paste0(STATEFP, COUNTYFP, TRACTCE, BLKGRPCE)) |>
   st_as_sf(coords = c("LONGITUDE", "LATITUDE"), crs = 4326)
-
-#narrow to fallbrook and temecula
-#library(sf); library(dplyr); library(osrm)
-
-#read_zone <- function(path, zone) {
-#  st_read(path, quiet = TRUE) |>
- #   st_drop_geometry() |>
-  #  transmute(bg_geoid = substr(GEOID20, 1, 12), zone = zone)  # check your column name: GEOID20 / GEOID
-#
-
-#zones <- bind_rows(
-#  read_zone("fallbrook_blocks.shp", "Fallbrook"),
-#  read_zone("temecula_blocks.shp",  "Temecula"),
-#  read_zone("sd_blocks.shp",        "SD rural"),
-#  read_zone("riverside_blocks_corrected.shp", "Riverside rural")
-#) |>
-#  distinct(bg_geoid, .keep_all = TRUE)
-
-#study_pts <- study_bg |>
- # inner_join(zones, by = c("GEOID" = "bg_geoid"))
 
 
 #read in blocks from diff areas
@@ -194,11 +175,11 @@ table(cut(pw_centroids$min_extra, c(-Inf, 1, 3, 5, 10, Inf)))
 
 ##have a range of time values from 7-211
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ##update 11/11/26
   
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   
 # --- 1. Table function that returns time and distance ---
 osrm_retry2 <- function(src, dst, tries = 3) {
@@ -313,17 +294,23 @@ if (file.exists(road_file)) {
   saveRDS(roads_raw, road_file)
 }
 
+# Pull the road lines out (works for either saved format)
+roads <- if (inherits(roads_raw, "osmdata")) roads_raw$osm_lines else roads_raw
+roads <- roads[!is.na(roads$highway), ]
 
 # --- 2. Build open and bridge-closed networks ---
 BRIDGE_OSM_ID <- "847853579"
-stopifnot(BRIDGE_OSM_ID %in% roads$osm_id)   # confirm the bridge is in the download
+stopifnot(BRIDGE_OSM_ID %in% roads$osm_id)
 
 g_open   <- weight_streetnet(roads, wt_profile = "motorcar",
                              type_col = "highway", id_col = "osm_id")
-g_closed <- weight_streetnet(filter(roads, osm_id != BRIDGE_OSM_ID), wt_profile = "motorcar",
+g_closed <- weight_streetnet(filter(roads, !osm_id %in% BRIDGE_OSM_ID), wt_profile = "motorcar",
                              type_col = "highway", id_col = "osm_id")
+# --- 3. Route 7 bridge-fastest centroids to Fallbrook ---
+lo <- res |> filter(bridge_fastest, dest == "Fallbrook")   # ADD THIS
+lo_xy <- st_coordinates(pw_centroids[lo$i, ]); colnames(lo_xy) <- c("x", "y")
+nrow(lo)   # should be 7
 
-# --- 3. Route your 7 bridge-fastest centroids to Fallbrook ---
 lo_xy <- st_coordinates(pw_centroids[lo$i, ]); colnames(lo_xy) <- c("x", "y")
 fb_xy <- st_coordinates(towns[towns$zone == "Fallbrook", ]); colnames(fb_xy) <- c("x", "y")
 
@@ -332,10 +319,16 @@ route <- function(g) tibble(
   km  = as.numeric(dodgr_dists(g, from = lo_xy, to = fb_xy, shortest = FALSE)) / 1000
 )
 
-# --- 4. Compare with the OSRM results ---
+# --- 4. Compare with OSRM ---
 cmp <- bind_cols(lo |> select(bg, hh, osrm_dt = dt, osrm_dd = dd),
                  route(g_open)   |> rename(open_min = min, open_km = km),
                  route(g_closed) |> rename(closed_min = min, closed_km = km)) |>
   mutate(dodgr_dt = closed_min - open_min,
          dodgr_dd = closed_km - open_km)
 cmp
+
+#very different output: 7.4 min average
+
+write_csv(detour_estimates, here::here("Detour_cost/clean_data", "detour_estimates.csv"))
+write_csv(res, here::here("Detour_cost/clean_data", "bridge_closure_by_bg.csv"))
+
