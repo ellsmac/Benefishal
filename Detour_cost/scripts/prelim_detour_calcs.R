@@ -1,6 +1,6 @@
 # Author: E MacLean
 # Created: Nov 18, 2026
-# Modified: none
+# Modified: Nov 20, 2026
 ##################
 #purpose of this script is to run preliminary detour cost calculations!
 
@@ -33,7 +33,8 @@ voc_24 <- read_csv(here("Detour_cost/clean_data",
                         "AAA_2024_vehicle_op_cost.csv"))
 
 #travel data
-  #rachel load osrm data table aquí por favor :)
+detour_data <- read_csv(here("Detour_cost/clean_data", 
+                             "detour_estimates.csv"))
 
 #traffic data
 traffic <- read_csv(here("traffic_study_data",
