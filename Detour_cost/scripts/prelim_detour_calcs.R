@@ -159,6 +159,6 @@ pooled_simple <- pooled |>
 
 pooled_simple |> mutate(across(starts_with("annual"), \(x) scales::dollar(x, accuracy = 1000)))
 
-write_csv(pooled_simple, here("Detour_cost/clean_data", "prelim_detour_costs_$.csv"))
+write_csv(pooled_simple, here("Detour_cost/clean_data", "prelim_detour_costs_usd.csv"))
 
 
