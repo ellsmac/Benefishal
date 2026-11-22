@@ -1,9 +1,10 @@
 # Historical Precipiation & Flood Event Data Matching
 # Author: E MacLean
 # Created: Nov 4, 2026
-# Modified: Nov 12, 2026
+# Modified: Nov 22, 2026
 ####################
 #goal of this script is to combine our cleaned precip and flood datasets!
+#Nov 22 mod is to make a floods/prism dataset for analysis
 
 #clean enviro
 # rm(list = ls())
@@ -13,24 +14,24 @@
 # library(tidyverse)
 
 #loading data
-#floods_daily <- read_csv(here("Flood_Data/clean_data",
-                   #           "daily_flood_buffer.csv"))
+floods_daily <- read_csv(here("Flood_Data/clean_data",
+                              "daily_flood_buffer.csv"))
                              #loads with annoying "...1" column
 
 #t_precip <- read_csv(here("Flood_data/clean_data", 
    #  "temecula_precip_actuals_2014_2024.csv"))
       #will load with annoying extra column called "...1"
 
-#prism_precip <- read_csv(here("Flood_Data/clean_data",
-                       #       "prism_precip_clean.csv"))
+prism_precip <- read_csv(here("Flood_Data/clean_data",
+                              "prism_precip_clean.csv"))
 
 #loading in flood events only dataset
-#flood_events <- read_csv(here("Flood_data/clean_data", "flood_events.csv"))
+flood_events <- read_csv(here("Flood_data/clean_data", "flood_events.csv"))
 
 #####
 #quick data cleaning
-#floods_daily <- floods_daily |>
-#  select(-...1)
+floods_daily <- floods_daily |>
+  select(-...1)
 
 #t_precip <- t_precip |>
 #  select(-...1)
@@ -74,8 +75,35 @@
 
 floods_precip <- read_csv(here("Flood_data/clean_data", "floods_precip.csv"))
 
+###
+#making prism dataset to match to floods, like t_precip
 
+#creating precip columns for 2 days before and 3 days after
+prism_windows <- prism_precip |>
+  arrange(date_pst) |>
+  mutate(precip_minus2 = lag(prism_precip_in, 2),
+         precip_minus1 = lag(prism_precip_in, 1),
+         precip_day0 = prism_precip_in,
+         precip_plus1 = lead(prism_precip_in, 1),
+         precip_plus2 = lead(prism_precip_in, 2),
+         precip_plus3 = lead(prism_precip_in, 3))
 
+#need pst date and time columns for joining to prism data 
+flood_events <- flood_events |>
+  mutate(date_pst = as.Date(date_time_utc, tz = "America/Los_Angeles"),
+         time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
+  relocate(date_pst, .after = date_time_utc) |>
+  relocate(time_pst, .after = date_pst)
+  
+#joining to flood events
+floods_prism <- flood_events |>
+  left_join(prism_windows, by = "date_pst") 
+
+floods_prism <- floods_prism |>
+  select(-prism_precip_in)
+
+floods_prism <- floods_prism |>
+  relocate(precip_day0, .after = cfs_value)
 
 
 
