@@ -105,5 +105,7 @@ floods_prism <- floods_prism |>
 floods_prism <- floods_prism |>
   relocate(precip_day0, .after = cfs_value)
 
-
+#saving as csv
+write_csv(floods_prism, here("Flood_data/clean_data",
+                                    "floods_prism.csv"))
 
