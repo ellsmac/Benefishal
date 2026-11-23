@@ -538,6 +538,23 @@ floods_2004_06 <- floods_2004_06 |>
   relocate(date_pst, .after = date_time_utc) |>
   relocate(time_pst, .after = date_pst)
 
+#keeping only highest cfs per distinct day...
+floods_2004_06 <- floods_2004_06 |>
+  group_by(date_pst) |>
+  slice_max(cfs_value, n = 1, with_ties = FALSE) |>
+  ungroup()
+
+#adding columns for day distinctions
+floods_2004_06 <- floods_2004_06 |>
+  mutate(flood = as.integer(date_time_utc %in% pf_2004_06$date_time_utc)) #labels flood days, but what do I do for 2/15, which is 72 post first flood AND it's own flood?
+
+floods_2004_06 <- floods_2004_06 |>
+  mutate(flood_minus1 = as.integer(date_pst %in% (date_pst[flood == 1] - 1))) |>
+  mutate(flood_minus2 = as.integer(date_pst %in% (date_pst[flood == 1] - 2))) |>
+  mutate(flood_plus1 = as.integer(date_pst %in% (date_pst[flood == 1] + 1))) |>
+  mutate(flood_plus2 = as.integer(date_pst %in% (date_pst[flood == 1] + 2))) |>
+  mutate(flood_plus3 = as.integer(date_pst %in% (date_pst[flood == 1] + 3)))
+
 #save floods datset!
 write.csv(floods_2004_06, here("Flood_data/clean_data",
                                "floods_2004_2006.csv"))
@@ -578,6 +595,23 @@ floods_2007_09 <- floods_2007_09 |>
   relocate(date_pst, .after = date_time_utc) |>
   relocate(time_pst, .after = date_pst)
 
+#keeping only highest cfs per distinct day...
+floods_2007_09 <- floods_2007_09 |>
+  group_by(date_pst) |>
+  slice_max(cfs_value, n = 1, with_ties = FALSE) |>
+  ungroup()
+
+#adding columns for day distinctions
+floods_2007_09 <- floods_2007_09 |>
+  mutate(flood = as.integer(date_time_utc %in% pf_2007_09$date_time_utc)) #labels flood days, but what do I do for 2/15, which is 72 post first flood AND it's own flood?
+
+floods_2007_09 <- floods_2007_09 |>
+  mutate(flood_minus1 = as.integer(date_pst %in% (date_pst[flood == 1] - 1))) |>
+  mutate(flood_minus2 = as.integer(date_pst %in% (date_pst[flood == 1] - 2))) |>
+  mutate(flood_plus1 = as.integer(date_pst %in% (date_pst[flood == 1] + 1))) |>
+  mutate(flood_plus2 = as.integer(date_pst %in% (date_pst[flood == 1] + 2))) |>
+  mutate(flood_plus3 = as.integer(date_pst %in% (date_pst[flood == 1] + 3)))
+
 #save floods datset!
 write.csv(floods_2007_09, here("Flood_data/clean_data",
                                "floods_2007_2009.csv"))
@@ -617,6 +651,24 @@ floods_2010_2012 <- floods_2010_2012 |>
          time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
   relocate(date_pst, .after = date_time_utc) |>
   relocate(time_pst, .after = date_pst)
+
+#keeping only highest cfs per distinct day...
+floods_2010_2012 <- floods_2010_2012 |>
+  group_by(date_pst) |>
+  slice_max(cfs_value, n = 1, with_ties = FALSE) |>
+  ungroup()
+
+#adding columns for day distinctions
+floods_2010_2012 <- floods_2010_2012 |>
+  mutate(flood = as.integer(date_time_utc %in% pf_2010_2012$date_time_utc)) #labels flood days, but what do I do for 2/15, which is 72 post first flood AND it's own flood?
+
+floods_2010_2012 <- floods_2010_2012 |>
+  mutate(flood_minus1 = as.integer(date_pst %in% (date_pst[flood == 1] - 1))) |>
+  mutate(flood_minus2 = as.integer(date_pst %in% (date_pst[flood == 1] - 2))) |>
+  mutate(flood_plus1 = as.integer(date_pst %in% (date_pst[flood == 1] + 1))) |>
+  mutate(flood_plus2 = as.integer(date_pst %in% (date_pst[flood == 1] + 2))) |>
+  mutate(flood_plus3 = as.integer(date_pst %in% (date_pst[flood == 1] + 3)))
+
 
 #save floods datset!
 write.csv(floods_2010_2012, here("Flood_data/clean_data",
@@ -671,6 +723,23 @@ floods_2016_2018 <- floods_2016_2018 |>
   relocate(date_pst, .after = date_time_utc) |>
   relocate(time_pst, .after = date_pst)
 
+#keeping only highest cfs per distinct day...
+floods_2016_2018 <- floods_2016_2018 |>
+  group_by(date_pst) |>
+  slice_max(cfs_value, n = 1, with_ties = FALSE) |>
+  ungroup()
+
+#adding columns for day distinctions
+floods_2016_2018 <- floods_2016_2018 |>
+  mutate(flood = as.integer(date_time_utc %in% pf_2016_2018$date_time_utc)) #labels flood days, but what do I do for 2/15, which is 72 post first flood AND it's own flood?
+
+floods_2016_2018 <- floods_2016_2018 |>
+  mutate(flood_minus1 = as.integer(date_pst %in% (date_pst[flood == 1] - 1))) |>
+  mutate(flood_minus2 = as.integer(date_pst %in% (date_pst[flood == 1] - 2))) |>
+  mutate(flood_plus1 = as.integer(date_pst %in% (date_pst[flood == 1] + 1))) |>
+  mutate(flood_plus2 = as.integer(date_pst %in% (date_pst[flood == 1] + 2))) |>
+  mutate(flood_plus3 = as.integer(date_pst %in% (date_pst[flood == 1] + 3)))
+
 #save floods datset!
 write.csv(floods_2016_2018, here("Flood_data/clean_data",
                                  "floods_2016_2018.csv"))
@@ -710,6 +779,23 @@ floods_2019_2021 <- floods_2019_2021 |>
          time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
   relocate(date_pst, .after = date_time_utc) |>
   relocate(time_pst, .after = date_pst)
+
+#keeping only highest cfs per distinct day...
+floods_2019_2021 <- floods_2019_2021 |>
+  group_by(date_pst) |>
+  slice_max(cfs_value, n = 1, with_ties = FALSE) |>
+  ungroup()
+
+#adding columns for day distinctions
+floods_2019_2021 <- floods_2019_2021 |>
+  mutate(flood = as.integer(date_time_utc %in% pf_2019_21$date_time_utc)) #labels flood days, but what do I do for 2/15, which is 72 post first flood AND it's own flood?
+
+floods_2019_2021 <- floods_2019_2021 |>
+  mutate(flood_minus1 = as.integer(date_pst %in% (date_pst[flood == 1] - 1))) |>
+  mutate(flood_minus2 = as.integer(date_pst %in% (date_pst[flood == 1] - 2))) |>
+  mutate(flood_plus1 = as.integer(date_pst %in% (date_pst[flood == 1] + 1))) |>
+  mutate(flood_plus2 = as.integer(date_pst %in% (date_pst[flood == 1] + 2))) |>
+  mutate(flood_plus3 = as.integer(date_pst %in% (date_pst[flood == 1] + 3)))
 
 #save floods datset!
 write.csv(floods_2019_2021, here("Flood_data/clean_data",
@@ -751,6 +837,23 @@ floods_2022_24 <- floods_2022_24 |>
   relocate(date_pst, .after = date_time_utc) |>
   relocate(time_pst, .after = date_pst)
 
+#keeping only highest cfs per distinct day...
+floods_2022_24 <- floods_2022_24 |>
+  group_by(date_pst) |>
+  slice_max(cfs_value, n = 1, with_ties = FALSE) |>
+  ungroup()
+
+#adding columns for day distinctions
+floods_2022_24 <- floods_2022_24 |>
+  mutate(flood = as.integer(date_time_utc %in% pf_2022_24$date_time_utc)) #labels flood days, but what do I do for 2/15, which is 72 post first flood AND it's own flood?
+
+floods_2022_24 <- floods_2022_24 |>
+  mutate(flood_minus1 = as.integer(date_pst %in% (date_pst[flood == 1] - 1))) |>
+  mutate(flood_minus2 = as.integer(date_pst %in% (date_pst[flood == 1] - 2))) |>
+  mutate(flood_plus1 = as.integer(date_pst %in% (date_pst[flood == 1] + 1))) |>
+  mutate(flood_plus2 = as.integer(date_pst %in% (date_pst[flood == 1] + 2))) |>
+  mutate(flood_plus3 = as.integer(date_pst %in% (date_pst[flood == 1] + 3)))
+
 #save floods datset!
 write.csv(floods_2022_24, here("Flood_data/clean_data",
                                  "floods_2022_2024.csv"))
@@ -789,6 +892,23 @@ floods_2025 <- floods_2025 |>
          time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
   relocate(date_pst, .after = date_time_utc) |>
   relocate(time_pst, .after = date_pst)
+
+#keeping only highest cfs per distinct day...
+floods_2025 <- floods_2025 |>
+  group_by(date_pst) |>
+  slice_max(cfs_value, n = 1, with_ties = FALSE) |>
+  ungroup()
+
+#adding columns for day distinctions
+floods_2025 <- floods_2025 |>
+  mutate(flood = as.integer(date_time_utc %in% pf_2025$date_time_utc)) #labels flood days, but what do I do for 2/15, which is 72 post first flood AND it's own flood?
+
+floods_2025 <- floods_2025 |>
+  mutate(flood_minus1 = as.integer(date_pst %in% (date_pst[flood == 1] - 1))) |>
+  mutate(flood_minus2 = as.integer(date_pst %in% (date_pst[flood == 1] - 2))) |>
+  mutate(flood_plus1 = as.integer(date_pst %in% (date_pst[flood == 1] + 1))) |>
+  mutate(flood_plus2 = as.integer(date_pst %in% (date_pst[flood == 1] + 2))) |>
+  mutate(flood_plus3 = as.integer(date_pst %in% (date_pst[flood == 1] + 3)))
 
 #save floods datset!
 write.csv(floods_2025, here("Flood_data/clean_data",
