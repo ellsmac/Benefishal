@@ -6,16 +6,13 @@ editor: visual
 theme: minty
 ---
 
-
-::: {.callout-important title = "To Do"}
-- verify which blocks are in/out
+::: {.callout-important title = "To Do"} - verify which blocks are in/out
 
 - add all possible origin points
 
 - update parameter mortality rates for county SD and Riv.... should they be the same?
 
-- Rewrite code to calculate relative risk ratio (RR delay time/RR regular time)
-:::
+- Rewrite code to calculate relative risk ratio (RR delay time/RR regular time) :::
 
 ## Load Packages
 
@@ -39,7 +36,7 @@ colnames(minute_comparison_original)
 
 Reminder: $Delta = Flood - Baseline$
 
-- positive Delta = Baseline is faster 
+- positive Delta = Baseline is faster
 
 - negative Delta = Detour (no bridge) is faster
 
@@ -102,6 +99,7 @@ riv_mort <- 33/100000 #REPLACE WITH REAL VALUE!!!!!
 df_cardiac<-read_csv(here("Emergency_Response/mortality_incident_calculation/estimated_cardiac_admits.csv"))
 survial_to_er <- 0.253
 survival_to_discharge <- 0.105
+#only 8.3% leave with favorable outcomes, other percent have severe disability or are comatose
 
 df_cardiac <- mutate(df_cardiac,EstimatedAnnualCardiacDeaths = (cardiac_admits_2024+cardiac_admits_2025)/(2*survial_to_er)*(1-survival_to_discharge)) %>% 
   select(geoid,EstimatedAnnualCardiacDeaths,popultn)
