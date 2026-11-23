@@ -1,0 +1,144 @@
+---
+title: "Calculation: Benefit of Additional Trails for Recreation"
+author: "Alecia Dezzani"
+format: html
+editor: visual
+theme: zephyr
+---
+
+# Notes
+
+::: {.callout-important title="To Do"}
+
+1. verify visitor data with Zach
+2. verify trail length (2-3 sig figs)
+3. add more papers?
+
+:::
+
+
+## Load Packages
+
+```{r}
+#| message: false
+
+#install.packages(inflateR)
+#install.packages(jtools)
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(inflateR)
+library(jtools)
+```
+
+## Load & Prep Data
+
+```{r}
+trail_benefit_data <- read_csv(here("trail_rec", "trail_benefit_meta.csv")) |>
+  clean_names() |>
+  select(lead_author:dollar_year) |>
+  drop_na(lead_author) |>
+  rename(
+    visitors_per_year = number_of_trail_users_per_year,
+    miles_studied = total_trail_miles_or_miles_added,
+    ben_per_person_trip_low = benefit_per_person_per_visit_trip_usd_low,
+    ben_per_person_trip_high = benefit_per_visit_trip_usd_high,
+    annual_agg_ben_low = total_benefit_annual_unless_noted_low,
+    annual_agg_ben_high = total_benefit_annual_unless_noted_high,
+    ben_per_mile_low = benefit_per_trail_mile_per_year_usd_low,
+    ben_per_mile_high = benefit_per_trail_mile_per_year_usd_high) |>
+  mutate(across(visitors_per_year:dollar_year, as.numeric))
+    
+```
+
+## Pivot Data to be Tidy
+
+```{r}
+trail_benefit_tidy <- trail_benefit_data |>
+  select(lead_author:miles_studied, dollar_year, ben_per_mile_low, ben_per_mile_high) |>
+  pivot_longer(cols = "ben_per_mile_low":"ben_per_mile_high",
+               names_to = "low_high",
+               values_to = "ben_per_mile")
+```
+
+## Convert nominal dollar values to real 2024 USD
+
+```{r}
+trail_benefit_tidy <- trail_benefit_tidy |>
+  rowwise() |>
+  mutate(
+    ben_per_mile_2024 = adjust_inflation(
+      amount    = ben_per_mile,
+      from_year = dollar_year,
+      currency  = "USD",
+      to_year   = 2024
+    )
+  ) |>
+  ungroup()
+```
+
+## Explore Data
+
+```{r}
+ben_plot_vis <- ggplot(data = trail_benefit_tidy, aes (x = visitors_per_year, 
+                                                       y = ben_per_mile_2024)) +
+  theme_minimal() +
+  #geom_smooth(method = "loess", color = "darkgreen", se = F) +
+  geom_smooth(method = "lm", color = "dodgerblue", se = T) +
+  geom_point(aes(size = miles_studied), alpha = 0.3) +
+  #geom_text(aes(label = lead_author), vjust = -1.2, size = 3) + 
+  labs(
+    title = "Trail Benefits (2024$) across Literature",
+    x = "Visitors per site per Year",
+    y = "Benefit Per Mile (2024$)",
+    size = "Miles Studied"
+  )
+ben_plot_vis
+
+```
+
+```{r}
+ben_plot_mile <- ggplot(data = trail_benefit_tidy, aes (x = miles_studied, 
+                                                       y = ben_per_mile_2024)) +
+  theme_minimal() +
+  geom_smooth(method = "loess", color = "darkgreen", se = F) +
+  geom_smooth(method = "lm", color = "dodgerblue", se = T) +
+  geom_point(aes(size = visitors_per_year), alpha = 0.3) +
+  #geom_text(aes(label = lead_author), vjust = -0.5, size = 3) + 
+  labs(
+    title = "Trail Benefits (2024$) across Literature",
+    x = "Total Miles Studied",
+    y = "Benefit Per Mile (2024$)",
+    size = "Visitors per Year"
+  )
+ben_plot_mile
+```
+
+## Regression: Per-Mile Trail Benefit
+
+```{r}
+trail_ben_reg <- lm(ben_per_mile_2024 ~ miles_studied + visitors_per_year,
+                 data = trail_benefit_tidy)
+b <- coef(trail_ben_reg)
+
+summ(trail_ben_reg, digits = 4)
+```
+
+## Create a Predictive Function
+
+```{r}
+
+# interaction = miles * visitors 
+
+ben_estimate <- function(miles_studied, visitors_per_year) {
+  b["(Intercept)"] + b["miles_studied"] * miles_studied + b["visitors_per_year"] * visitors_per_year
+}
+
+# Calculate the estimated Benefit ($) in 
+ben_estimate(miles_studied = 2.2, visitors_per_year = 100000) 
+
+# PLUG IN REAL VALUES!!!!!
+```
+
+Result: The estimated benefit of the additional **2.2** miles of trail by the Santa Margarita River Bridge Project are **$1,115,532** per year.
