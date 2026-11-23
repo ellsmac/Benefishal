@@ -145,7 +145,7 @@ raw_2010_2012 <- read_csv(here("Flood_data/raw_data",
                                             #     time = c("2013-01-01", "2015-12-31"))
       #saving raw 2013-2015 data
       #write.csv(raw_2013_2015, here("Flood_data/raw_data",
-                                    "raw_2013_2015_gauge_11044300.csv"))
+                                 #   "raw_2013_2015_gauge_11044300.csv"))
       #read raw 16-18 data
       #raw_2016_2018 <- read_waterdata_continuous(monitoring_location_id = siteNumber,
                                          #        parameter_code = parameterCd,
@@ -230,7 +230,8 @@ discharge_1992 <- raw_1992 |>
 
 #looking for possible floods
 pf_1992 <- discharge_1992 |>
-  filter(cfs_value >= 2300)
+  filter(cfs_value >= 2300) |>
+  mutate(flood = 1)
   #68 rows returned where cfs is greater than or equal to 2300
 
 #want to know the peak flood time for each day with a value over 2300, don't keep duplicates
@@ -255,6 +256,23 @@ floods_1992 <- floods_1992 |>
          time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
   relocate(date_pst, .after = date_time_utc) |>
   relocate(time_pst, .after = date_pst)
+
+#keeping only highest cfs per distinct day...
+floods_1992 <- floods_1992 |>
+  group_by(date_pst) |>
+  slice_max(cfs_value, n = 1, with_ties = FALSE) |>
+  ungroup()
+
+#adding columns for day distinctions
+floods_1992 <- floods_1992 |>
+  mutate(flood = as.integer(date_time_utc %in% pf_1992$date_time_utc)) #labels flood days, but what do I do for 2/15, which is 72 post first flood AND it's own flood?
+
+floods_1992 <- floods_1992 |>
+  mutate(flood_minus1 = as.integer(date_pst %in% (date_pst[flood == 1] - 1))) |>
+  mutate(flood_minus2 = as.integer(date_pst %in% (date_pst[flood == 1] - 2))) |>
+  mutate(flood_plus1 = as.integer(date_pst %in% (date_pst[flood == 1] + 1))) |>
+  mutate(flood_plus2 = as.integer(date_pst %in% (date_pst[flood == 1] + 2))) |>
+  mutate(flood_plus3 = as.integer(date_pst %in% (date_pst[flood == 1] + 3)))
 
 #save floods datset!
 write.csv(floods_1992, here("Flood_data/clean_data",
