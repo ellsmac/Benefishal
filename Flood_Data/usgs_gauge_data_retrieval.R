@@ -378,16 +378,12 @@ floods_1995_97 <- floods_1995_97 |>
 floods_1995_97 <- floods_1995_97 |>
   mutate(flood = as.integer(date_time_utc %in% pf_1995_97$date_time_utc)) #labels flood days, but what do I do for 2/15, which is 72 post first flood AND it's own flood?
 
-floods_1993_94 <- floods_1993_94 |>
+floods_1995_97 <- floods_1995_97 |>
   mutate(flood_minus1 = as.integer(date_pst %in% (date_pst[flood == 1] - 1))) |>
   mutate(flood_minus2 = as.integer(date_pst %in% (date_pst[flood == 1] - 2))) |>
   mutate(flood_plus1 = as.integer(date_pst %in% (date_pst[flood == 1] + 1))) |>
   mutate(flood_plus2 = as.integer(date_pst %in% (date_pst[flood == 1] + 2))) |>
   mutate(flood_plus3 = as.integer(date_pst %in% (date_pst[flood == 1] + 3)))
-
-#save floods datset!
-write.csv(floods_1993_94, here("Flood_data/clean_data",
-                               "floods_1993_1994.csv"))
 
 #save floods datset!
 write.csv(floods_1995_97, here("Flood_data/clean_data",
@@ -427,6 +423,23 @@ floods_1998_00 <- floods_1998_00 |>
          time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
   relocate(date_pst, .after = date_time_utc) |>
   relocate(time_pst, .after = date_pst)
+
+#keeping only highest cfs per distinct day...
+floods_1998_00 <- floods_1998_00 |>
+  group_by(date_pst) |>
+  slice_max(cfs_value, n = 1, with_ties = FALSE) |>
+  ungroup()
+
+#adding columns for day distinctions
+floods_1998_00 <- floods_1998_00 |>
+  mutate(flood = as.integer(date_time_utc %in% pf_1995_97$date_time_utc)) #labels flood days, but what do I do for 2/15, which is 72 post first flood AND it's own flood?
+
+floods_1998_00 <- floods_1998_00 |>
+  mutate(flood_minus1 = as.integer(date_pst %in% (date_pst[flood == 1] - 1))) |>
+  mutate(flood_minus2 = as.integer(date_pst %in% (date_pst[flood == 1] - 2))) |>
+  mutate(flood_plus1 = as.integer(date_pst %in% (date_pst[flood == 1] + 1))) |>
+  mutate(flood_plus2 = as.integer(date_pst %in% (date_pst[flood == 1] + 2))) |>
+  mutate(flood_plus3 = as.integer(date_pst %in% (date_pst[flood == 1] + 3)))
 
 #save floods datset!
 write.csv(floods_1998_00, here("Flood_data/clean_data",
