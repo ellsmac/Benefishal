@@ -6,16 +6,13 @@ editor: visual
 theme: minty
 ---
 
-
-::: {.callout-important title = "To Do"}
-- verify which blocks are in/out
+::: {.callout-important title = "To Do"} - verify which blocks are in/out
 
 - add all possible origin points
 
 - update parameter mortality rates for county SD and Riv.... should they be the same?
 
-- Rewrite code to calculate relative risk ratio (RR delay time/RR regular time)
-:::
+- Rewrite code to calculate relative risk ratio (RR delay time/RR regular time) :::
 
 ## Load Packages
 
@@ -39,7 +36,7 @@ colnames(minute_comparison_original)
 
 Reminder: $Delta = Flood - Baseline$
 
-- positive Delta = Baseline is faster 
+- positive Delta = Baseline is faster
 
 - negative Delta = Detour (no bridge) is faster
 
@@ -102,15 +99,17 @@ riv_mort <- 33/100000 #REPLACE WITH REAL VALUE!!!!!
 df_cardiac<-read_csv(here("Emergency_Response/mortality_incident_calculation/estimated_cardiac_admits.csv"))
 survial_to_er <- 0.253
 survival_to_discharge <- 0.105
+#only 8.3% leave with favorable outcomes, other percent have severe disability or are comatose
+#Survival to discharge only 8.3% in California, but we don't have survial_to_er for CA only
 
-df_cardiac <- mutate(df_cardiac,EstimatedAnnualCardiacDeaths = (cardiac_admits_2024+cardiac_admits_2025)/(2*survial_to_er)*(1-survival_to_discharge)) %>% 
+df_deaths <- mutate(df_cardiac,EstimatedAnnualCardiacDeaths = (cardiac_admits_2024+cardiac_admits_2025)/(2*survial_to_er)*(1-survival_to_discharge)) %>% 
   select(geoid,EstimatedAnnualCardiacDeaths,popultn)
 
-print(sum(df_cardiac$EstimatedAnnualCardiacDeaths)/sum(df_cardiac$popultn))
+print(sum(df_deaths$EstimatedAnnualCardiacDeaths)/sum(df_cardiac$popultn))
 #Should be around 0.1%
 
 mort_calc <- min_comp_rr %>% 
-  left_join(df_cardiac,by = c("block_geoid_2020" = "geoid")) %>% 
+  left_join(df_deaths,by = c("block_geoid_2020" = "geoid")) %>% 
   mutate(add_mort = rr_ratio*EstimatedAnnualCardiacDeaths) %>% 
   select(block_geoid_2020,add_mort)
 ```
@@ -131,4 +130,49 @@ VSL: \$12,594,964.20 (Source: <https://www.bls.gov/data/inflation_calculator.htm
 total_cost_mort <- total_add_mort*(1.68/365.25)*(12594964.20) 
 
 print(total_cost_mort)
+
+
+
+
+#Sensitivity Analysis
+survial_to_er <- 0.253
+survival_to_discharge <- 0.105
+
+sensitivity_results_df <- data.frame(
+  s_factor_preadmit = numeric(),
+  s_factor_postadmit = numeric(),
+  total_add_mort = numeric(),
+  total_cost_mort = numeric()
+)
+
+for (s_factor_preadmit in seq(from = 0.8, to = 1.2, by = 0.05)){
+  for (s_factor_postadmit in seq(from = 0.8, to = 1.2, by = 0.05)){
+  df_deaths <- mutate(df_cardiac,EstimatedAnnualCardiacDeaths = (cardiac_admits_2024+cardiac_admits_2025)/(2*survial_to_er*s_factor_preadmit)*(1-survival_to_discharge*s_factor_preadmit*s_factor_postadmit)) %>% 
+    select(geoid,EstimatedAnnualCardiacDeaths,popultn)
+  
+  print(sum(df_deaths$EstimatedAnnualCardiacDeaths)/sum(df_cardiac$popultn))
+  #Should be around 0.1%
+  
+  mort_calc <- min_comp_rr %>% 
+    left_join(df_deaths,by = c("block_geoid_2020" = "geoid")) %>% 
+    mutate(add_mort = rr_ratio*EstimatedAnnualCardiacDeaths) %>% 
+    select(block_geoid_2020,add_mort)
+  
+  total_add_mort <- sum(mort_calc$add_mort)
+  
+  total_cost_mort <- total_add_mort*(1.68/365.25)*(12594964.20) 
+  
+  sensitivity_results_df <- rbind(results_df, data.frame(
+    s_factor_preadmit = s_factor_preadmit,
+    s_factor_postadmit = s_factor_postadmit,
+    total_add_mort = total_add_mort,
+    total_cost_mort = total_cost_mort
+  ))
+  }
+}
+
+sensitivity_results_df <- sensitivity_results_df %>% 
+  filter(s_factor_postadmit==1)
+  
+
 ```
