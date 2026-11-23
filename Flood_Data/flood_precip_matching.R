@@ -25,9 +25,6 @@ t_precip <- read_csv(here("Flood_data/clean_data",
 prism_precip <- read_csv(here("Flood_Data/clean_data",
                               "prism_precip_clean.csv"))
 
-#loading in flood events only dataset
-flood_events <- read_csv(here("Flood_data/clean_data", "flood_events.csv"))
-
 #####
 #quick data cleaning
 floods_daily <- floods_daily |>
@@ -76,7 +73,7 @@ floods_precip <- floods_daily |>
   #has lots of NAs in precip columns bc we only have 10 years of actual precip data atm
 
 #saving floods_precip data
-#write_csv(floods_precip, here("Flood_data/clean_data", "floods_precip.csv"))
+write_csv(floods_precip, here("Flood_data/clean_data", "floods_precip.csv"))
 
 #load cleaned floods_precip data
 
@@ -94,25 +91,15 @@ prism_windows <- prism_precip |>
          precip_plus1 = lead(prism_precip_in, 1),
          precip_plus2 = lead(prism_precip_in, 2),
          precip_plus3 = lead(prism_precip_in, 3))
-
-#need pst date and time columns for joining to prism data 
-flood_events <- flood_events |>
-  mutate(date_pst = as.Date(date_time_utc, tz = "America/Los_Angeles"),
-         time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
-  relocate(date_pst, .after = date_time_utc) |>
-  relocate(time_pst, .after = date_pst)
   
 #joining to flood events
-floods_prism_windows <- floods_daily |>
+floods_prism <- floods_daily |>
   left_join(prism_windows, by = "date_pst") 
 
-floods_prism_windows <- floods_prism_windows |>
+floods_prism <- floods_prism |>
   select(-prism_precip_in)
 
-floods_prism_windows <- floods_prism_windows |>
-  relocate(precip_day0, .after = cfs_value)
-
 #saving as csv
-write_csv(floods_prism_windows, here("Flood_data/clean_data",
-                                    "floods_prism_windows.csv"))
+write_csv(floods_prism, here("Flood_data/clean_data",
+                                    "floods_prism.csv"))
 
