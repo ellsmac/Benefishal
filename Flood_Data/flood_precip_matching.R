@@ -7,11 +7,11 @@
 #Nov 22 mod is to make a floods/prism dataset for analysis
 
 #clean enviro
-# rm(list = ls())
+ rm(list = ls())
 
 #loading libraries
-# library(here)
-# library(tidyverse)
+library(here)
+library(tidyverse)
 
 #loading data
 floods_daily <- read_csv(here("Flood_Data/clean_data",
@@ -45,8 +45,8 @@ flood_events <- flood_events |>
 
 ######
 #joining actual precip to flood data!
-floods_precip <- floods_daily |>
-  left_join(t_precip, by = "date_pst")
+#floods_precip <- floods_daily |>
+ # left_join(t_precip, by = "date_pst")
 
 #joining prism precip too
 #flood_precip_prism <- flood_precip |>
@@ -57,22 +57,22 @@ floods_precip <- floods_daily |>
 #want to create a data frame that has my precip values for days before and after as separate columns
 
 #editing t_precip to join to flood events, making precip before and after flood event columns
-#t_precip_windows <- t_precip |>
-#  arrange(date_pst) |>
-#  mutate(precip_minus2 = lag(precip_inches, 2),
-#         precip_minus1 = lag(precip_inches, 1),
-#         precip_day0 = precip_inches,
-#         precip_plus1 = lead(precip_inches, 1),
-#         precip_plus2 = lead(precip_inches, 2),
-#         precip_plus3 = lead(precip_inches, 3))
+t_precip_windows <- t_precip |>
+  arrange(date_pst) |>
+  mutate(precip_minus2 = lag(precip_inches, 2),
+         precip_minus1 = lag(precip_inches, 1),
+         precip_day0 = precip_inches,
+         precip_plus1 = lead(precip_inches, 1),
+         precip_plus2 = lead(precip_inches, 2),
+         precip_plus3 = lead(precip_inches, 3))
 
-#t_precip_windows <- t_precip_windows |>
-#  select(-precip_inches) |>
-#  relocate(precip_day0, .after = date_pst)
+t_precip_windows <- t_precip_windows |>
+  select(-precip_inches) |>
+  relocate(precip_day0, .after = date_pst)
 
 #joining floods_daily to t_precip_windows
-#floods_precip <- floods_daily |>
-  #left_join(t_precip_windows, by = "date_pst")
+floods_precip <- floods_daily |>
+  left_join(t_precip_windows, by = "date_pst")
   #has lots of NAs in precip columns bc we only have 10 years of actual precip data atm
 
 #saving floods_precip data
