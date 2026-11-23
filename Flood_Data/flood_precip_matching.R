@@ -18,8 +18,8 @@ floods_daily <- read_csv(here("Flood_Data/clean_data",
                               "daily_flood_buffer.csv"))
                              #loads with annoying "...1" column
 
-#t_precip <- read_csv(here("Flood_data/clean_data", 
-   #  "temecula_precip_actuals_2014_2024.csv"))
+t_precip <- read_csv(here("Flood_data/clean_data", 
+     "temecula_precip_actuals_2014_2024.csv"))
       #will load with annoying extra column called "...1"
 
 prism_precip <- read_csv(here("Flood_Data/clean_data",
@@ -33,13 +33,20 @@ flood_events <- read_csv(here("Flood_data/clean_data", "flood_events.csv"))
 floods_daily <- floods_daily |>
   select(-...1)
 
-#t_precip <- t_precip |>
-#  select(-...1)
+t_precip <- t_precip |>
+  select(-...1)
+
+#need pst date and time columns for joining to prism data 
+flood_events <- flood_events |>
+  mutate(date_pst = as.Date(date_time_utc, tz = "America/Los_Angeles"),
+         time_pst = format(date_time_utc, "%H:%M:%S", tz = "America/Los_Angeles")) |>
+  relocate(date_pst, .after = date_time_utc) |>
+  relocate(time_pst, .after = date_pst)
 
 ######
 #joining actual precip to flood data!
-#flood_precip <- floods_daily |>
-#  left_join(t_precip, by = "date_pst")
+floods_precip <- floods_daily |>
+  left_join(t_precip, by = "date_pst")
 
 #joining prism precip too
 #flood_precip_prism <- flood_precip |>
@@ -96,16 +103,16 @@ flood_events <- flood_events |>
   relocate(time_pst, .after = date_pst)
   
 #joining to flood events
-floods_prism <- flood_events |>
+floods_prism_windows <- floods_daily |>
   left_join(prism_windows, by = "date_pst") 
 
-floods_prism <- floods_prism |>
+floods_prism_windows <- floods_prism_windows |>
   select(-prism_precip_in)
 
-floods_prism <- floods_prism |>
+floods_prism_windows <- floods_prism_windows |>
   relocate(precip_day0, .after = cfs_value)
 
 #saving as csv
-write_csv(floods_prism, here("Flood_data/clean_data",
-                                    "floods_prism.csv"))
+write_csv(floods_prism_windows, here("Flood_data/clean_data",
+                                    "floods_prism_windows.csv"))
 
