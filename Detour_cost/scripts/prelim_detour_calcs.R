@@ -95,7 +95,7 @@ adt
    # = ~1,243 vehicles/day in 2024 (1 day in Oct)
 
 km_to_mi  <- 0.621371
-vot_share <- c(0.5, 1.0)     #1 = full hourly wage; 
+vot_share <- 1.0     #1 = full hourly wage; 
 closure_days <- 1.63
               #Do we want to adjust to Cal B/C?
 #check - do we need this value? What is the Cal B/C
@@ -165,6 +165,9 @@ pooled_simple <- pooled |>
 
 pooled_simple |> mutate(across(starts_with("annual"), \(x) scales::dollar(x, accuracy = 1000)))
 
-write_csv(pooled_simple, here("Detour_cost/clean_data", "prelim_detour_costs_usd.csv"))
+write_csv(pooled_simple, here("Detour_cost/clean_data", "prelim_detour_usd_updated.csv"))
+
+
+##Plantanga says use sensitivity analysis to say this we assume this % is locals using the bridge 
 
 
