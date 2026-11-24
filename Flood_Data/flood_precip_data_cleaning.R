@@ -66,46 +66,43 @@ t_precip_2016_2017 <- read.csv(here("Flood_Data/raw_data",
 #isolate peak flow for every day, then match precip to that, because precip is daily 
 
 #flood data loading
-#floods_92 <- read_csv(here("Flood_Data/clean_data", "floods_1992.csv"))
+floods_92 <- read_csv(here("Flood_Data/clean_data", "floods_1992.csv"))
 
-#floods_93_94 <- read_csv(here("Flood_Data/clean_data", "floods_1993_1994.csv"))
+floods_93_94 <- read_csv(here("Flood_Data/clean_data", "floods_1993_1994.csv"))
 
-#floods_95_97 <- read_csv(here("Flood_Data/clean_data", "floods_1995_1997.csv"))
+floods_95_97 <- read_csv(here("Flood_Data/clean_data", "floods_1995_1997.csv"))
 
-#floods_98_00 <- read_csv(here("Flood_Data/clean_data", "floods_1998_2000.csv"))
+floods_98_00 <- read_csv(here("Flood_Data/clean_data", "floods_1998_2000.csv"))
 
-#floods_01_03 <- read_csv(here("Flood_Data/clean_data", "floods_2001_2003.csv"))
+floods_01_03 <- read_csv(here("Flood_Data/clean_data", "floods_2001_2003.csv"))
 
-#floods_04_06 <- read_csv(here("Flood_Data/clean_data", "floods_2004_2006.csv"))
+floods_04_06 <- read_csv(here("Flood_Data/clean_data", "floods_2004_2006.csv"))
 
-#floods_07_09 <- read_csv(here("Flood_Data/clean_data", "floods_2007_2009.csv"))
+floods_07_09 <- read_csv(here("Flood_Data/clean_data", "floods_2007_2009.csv"))
 
-#floods_10_12 <- read_csv(here("Flood_Data/clean_data", "floods_2010_2012.csv"))
+floods_10_12 <- read_csv(here("Flood_Data/clean_data", "floods_2010_2012.csv"))
 
 #floods_13_15 <- read_csv(here("Flood_Data/clean_data", "floods_2013_2015.csv"))
   #file doesn't exist because there were no flooding events 
 
-#floods_16_18 <- read_csv(here("Flood_Data/clean_data", "floods_2016_2018.csv"))
+floods_16_18 <- read_csv(here("Flood_Data/clean_data", "floods_2016_2018.csv"))
 
-#floods_19_21 <- read_csv(here("Flood_Data/clean_data", "floods_2019_2021.csv"))
+floods_19_21 <- read_csv(here("Flood_Data/clean_data", "floods_2019_2021.csv"))
 
-#floods_22_24 <- read_csv(here("Flood_Data/clean_data", "floods_2022_2024.csv"))
+floods_22_24 <- read_csv(here("Flood_Data/clean_data", "floods_2022_2024.csv"))
 
-#floods_25 <- read_csv(here("Flood_Data/clean_data", "floods_2025.csv"))
+floods_25 <- read_csv(here("Flood_Data/clean_data", "floods_2025.csv"))
 
 #floods data merging
-#floods <- bind_rows(floods_92, floods_93_94, floods_95_97, floods_98_00,
+floods <- bind_rows(floods_92, floods_93_94, floods_95_97, floods_98_00,
                     floods_01_03, floods_04_06, floods_07_09, floods_10_12,
                     floods_16_18, floods_19_21, floods_22_24, floods_25)
 
-#floods <- floods |>
-  #select(-...1)
+floods <- floods |>
+  select(-...1)
 
-#now want to isolate peak flow for every distinct date in date_pst
-#floods_daily <- floods |>
- # slice_max(cfs_value, by = date_pst, n = 1, with_ties = FALSE)
-
-#write.csv(floods_daily, here("Flood_Data/clean_data", "daily_flood_buffer.csv"))
+#saving this dataset
+write.csv(floods, here("Flood_Data/clean_data", "daily_flood_buffer.csv"))
   #saved daily max flows for flood events plus 
   #the max values for the 48hrs before and 72hrs after each flood event
 
