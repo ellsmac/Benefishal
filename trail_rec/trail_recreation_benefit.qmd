@@ -9,11 +9,10 @@ theme: zephyr
 # Notes
 
 ::: {.callout-important title="To Do"}
-
-1. verify visitor data with Zach
-2. verify trail length (2-3 sig figs)
-3. add more papers?
-
+1. Ellie: verify visitor data with Zach
+2. Ellie: verify trail length (2-3 sig figs)
+3. Alecia: fix code to use b per-person-per-trip benefit, then ping Jack
+4. add more papers?
 :::
 
 
@@ -84,7 +83,7 @@ trail_benefit_tidy <- trail_benefit_tidy |>
 ben_plot_vis <- ggplot(data = trail_benefit_tidy, aes (x = visitors_per_year, 
                                                        y = ben_per_mile_2024)) +
   theme_minimal() +
-  #geom_smooth(method = "loess", color = "darkgreen", se = F) +
+  geom_smooth(method = "loess", color = "darkgreen", se = F) +
   geom_smooth(method = "lm", color = "dodgerblue", se = T) +
   geom_point(aes(size = miles_studied), alpha = 0.3) +
   #geom_text(aes(label = lead_author), vjust = -1.2, size = 3) + 
