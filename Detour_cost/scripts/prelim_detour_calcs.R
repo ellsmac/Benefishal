@@ -52,8 +52,8 @@ traffic <- read_csv(here("traffic_study_data",
 
 #step 1: select inputs for equation
 
-#wages from census tracts that contain the 7 affected block groups
-# (tract GEOID = first 11 digits of the block-group GEOID)
+#wages from census tracts that contain the 7 block groups
+#(tract GEOID = first 11 digits of the block-group GEOID)
 bg_detail <- read_csv(here("Detour_cost/clean_data", "bridge_closure_by_bg.csv"))
 affected_tracts <- bg_detail |>
   filter(bridge_fastest) |>
@@ -62,22 +62,24 @@ affected_tracts <- bg_detail |>
   pull()
 affected_tracts
 
+##should be 7 blocks^
+
 wage <- c(
-  `2019` = income_r19 |> filter(geoid %in% affected_tracts) |> pull(med_hourly_income) |> mean(na.rm = TRUE),
+  `2019` = income_r19 |> filter(geoid %in% affected_tracts) |> pull(med_hourly_income_adj) |> mean(na.rm = TRUE),
   `2024` = income_r24 |> filter(geoid %in% affected_tracts) |> pull(med_hourly_income) |> mean(na.rm = TRUE)
 )
 wage
 
 #VOC: AAA "total" row (fuel + maintenance), $ per mile
 voc <- c(
-  `2019` = voc_19 |> filter(cost_type == "total") |> pull(usd_19),
+  `2019` = voc_19 |> filter(cost_type == "total") |> pull(usd_24),
   `2024` = voc_24 |> filter(cost_type == "total") |> pull(usd_24)
 )
 voc
 
 #traffic: check which directions are bridge crossings
 table(traffic$direction)
-bridge_dirs <- c("nb", "sb")   # EDIT after checking: only directions that cross the bridge
+bridge_dirs <- c("nb", "sb")  
 
 adt <- traffic |>
   filter(direction %in% bridge_dirs) |>
@@ -93,8 +95,10 @@ adt
    # = ~1,243 vehicles/day in 2024 (1 day in Oct)
 
 km_to_mi  <- 0.621371
-vot_share <- 1     # 1 = full hourly wage; 
-              #Cal B/C may use a fraction for personal trips
+vot_share <- c(0.5, 1.0)     #1 = full hourly wage; 
+closure_days <- 1.63
+              #Do we want to adjust to Cal B/C?
+#check - do we need this value? What is the Cal B/C
 
 #Step 2: run dif scenarios: yr*detour method*num ppl per car
 results <- expand_grid(
@@ -113,7 +117,8 @@ results <- expand_grid(
     voc_cost_trip  = extra_mi * voc,                               # per vehicle
     time_cost_trip = extra_hr * wage * vot_share * occupancy,      # per person x people in car
     cost_trip      = voc_cost_trip + time_cost_trip,
-    cost_year      = adt * cost_trip * 365
+    cost_day       = adt * cost_trip,
+    cost_year      = adt * cost_trip * closure_days #now updated to just our 1.63 days
   )
 
 #3. Results table
@@ -133,14 +138,15 @@ pooled <- expand_grid(
   left_join(detour_data |> select(method, dt_min, dd_km), by = "method") |>
   mutate(
     adt            = adt_pooled$adt,
-    wage           = wage["2024"],
-    voc            = voc["2024"],
+    wage           = wage["2024"],  #use ave with 2019
+    voc            = voc["2024"],  #use ave with 2019
     extra_mi       = dd_km * km_to_mi,
     extra_hr       = dt_min / 60,
     voc_cost_trip  = extra_mi * voc,
     time_cost_trip = extra_hr * wage * vot_share * occupancy,
     cost_trip      = voc_cost_trip + time_cost_trip,
-    cost_year      = adt * cost_trip * 365
+    cost_day       = adt * cost_trip,
+    cost_year      = adt * cost_trip * closure_days
   )
 
 #simplify to easier to read $ values
