@@ -10,8 +10,7 @@ theme: zephyr
 
 ::: {.callout-important title="To Do"}
 1. Ellie: verify visitor data with Zach
-3. Alecia: fix code to use b per-person-per-trip benefit, then ping Jack
-4. add more papers?
+2. add more papers?
 :::
 
 
