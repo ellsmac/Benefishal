@@ -119,8 +119,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 <div class="callout-body-container callout-body">
 <ol type="1">
-<li>verify visitor data with Zach</li>
-<li>verify trail length (2-3 sig figs)</li>
+<li>Ellie: verify visitor data with Zach</li>
+<li>Alecia: fix code to use b per-person-per-trip benefit, then ping Jack</li>
 <li>add more papers?</li>
 </ol>
 </div>
@@ -144,7 +144,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="load-prep-data" class="level2">
 <h2 class="anchored" data-anchor-id="load-prep-data">Load &amp; Prep Data</h2>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>trail_benefit_data <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="fu">here</span>(<span class="st">"trail_rec"</span>, <span class="st">"trail_benefit_meta.csv"</span>)) <span class="sc">|&gt;</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>trail_benefit_data <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="fu">here</span>(<span class="st">"trail_rec"</span>, <span class="st">"trail_benefit_data.csv"</span>)) <span class="sc">|&gt;</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">clean_names</span>() <span class="sc">|&gt;</span></span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(lead_author<span class="sc">:</span>dollar_year) <span class="sc">|&gt;</span></span>
 <span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">drop_na</span>(lead_author) <span class="sc">|&gt;</span></span>
@@ -159,7 +159,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">ben_per_mile_high =</span> benefit_per_trail_mile_per_year_usd_high) <span class="sc">|&gt;</span></span>
 <span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="fu">across</span>(visitors_per_year<span class="sc">:</span>dollar_year, as.numeric))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stderr">
-<pre><code>Rows: 6 Columns: 33
+<pre><code>Rows: 44 Columns: 33
 ── Column specification ────────────────────────────────────────────────────────
 Delimiter: ","
 chr (21): Lead Author, Study title, Trail / Site Name, Trail Material, Count...
@@ -229,7 +229,7 @@ lgl  (2): Estimated benefit per trail mile (2024 USD) LOW, Estimated benefit...
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>ben_plot_mile <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(<span class="at">data =</span> trail_benefit_tidy, <span class="fu">aes</span> (<span class="at">x =</span> miles_studied, </span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>                                                       <span class="at">y =</span> ben_per_mile_2024)) <span class="sc">+</span></span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"loess"</span>, <span class="at">color =</span> <span class="st">"darkgreen"</span>, <span class="at">se =</span> F) <span class="sc">+</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>  <span class="co">#geom_smooth(method = "loess", color = "darkgreen", se = F) +</span></span>
 <span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>, <span class="at">color =</span> <span class="st">"dodgerblue"</span>, <span class="at">se =</span> T) <span class="sc">+</span></span>
 <span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="fu">aes</span>(<span class="at">size =</span> visitors_per_year), <span class="at">alpha =</span> <span class="fl">0.3</span>) <span class="sc">+</span></span>
 <span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="co">#geom_text(aes(label = lead_author), vjust = -0.5, size = 3) + </span></span>
@@ -241,8 +241,7 @@ lgl  (2): Estimated benefit per trail mile (2024 USD) LOW, Estimated benefit...
 <span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>  )</span>
 <span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>ben_plot_mile</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stderr">
-<pre><code>`geom_smooth()` using formula = 'y ~ x'
-`geom_smooth()` using formula = 'y ~ x'</code></pre>
+<pre><code>`geom_smooth()` using formula = 'y ~ x'</code></pre>
 </div>
 <div class="cell-output-display">
 <div>
@@ -360,15 +359,18 @@ lgl  (2): Estimated benefit per trail mile (2024 USD) LOW, Estimated benefit...
 <span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  b[<span class="st">"(Intercept)"</span>] <span class="sc">+</span> b[<span class="st">"miles_studied"</span>] <span class="sc">*</span> miles_studied <span class="sc">+</span> b[<span class="st">"visitors_per_year"</span>] <span class="sc">*</span> visitors_per_year</span>
 <span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Calculate the estimated Benefit ($) in </span></span>
-<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a><span class="fu">ben_estimate</span>(<span class="at">miles_studied =</span> <span class="fl">2.2</span>, <span class="at">visitors_per_year =</span> <span class="dv">100000</span>) </span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a><span class="co"># SMRP-Specific Parameters</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>smrp_vis <span class="ot">=</span> <span class="dv">100000</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>smrp_mi <span class="ot">=</span> <span class="fl">2.21</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Calculate the estimated Benefit ($) in </span></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>final_estimate_smrp <span class="ot">&lt;-</span> <span class="fu">ben_estimate</span>(<span class="at">miles_studied =</span> smrp_mi, <span class="at">visitors_per_year =</span> smrp_vis) </span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"The estimated benefit of the additional"</span>, smrp_mi, <span class="st">"miles of trail by the Santa Margarita River Bridge Project are $"</span>, final_estimate_smrp, <span class="st">"per year."</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>(Intercept) 
-    1115532 </code></pre>
+<pre><code>The estimated benefit of the additional 2.21 miles of trail by the Santa Margarita River Bridge Project are $ 1115296 per year.</code></pre>
 </div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># PLUG IN REAL VALUES!!!!!</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
-<p>Result: The estimated benefit of the additional <strong>2.2</strong> miles of trail by the Santa Margarita River Bridge Project are <strong>$1,115,532</strong> per year.</p>
 </section>
 </section>
 

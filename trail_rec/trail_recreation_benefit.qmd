@@ -10,7 +10,6 @@ theme: zephyr
 
 ::: {.callout-important title="To Do"}
 1. Ellie: verify visitor data with Zach
-2. Ellie: verify trail length (2-3 sig figs)
 3. Alecia: fix code to use b per-person-per-trip benefit, then ping Jack
 4. add more papers?
 :::
@@ -29,12 +28,14 @@ library(here)
 library(janitor)
 library(inflateR)
 library(jtools)
+
+options(scipen = 999)
 ```
 
 ## Load & Prep Data
 
 ```{r}
-trail_benefit_data <- read_csv(here("trail_rec", "trail_benefit_meta.csv")) |>
+trail_benefit_data <- read_csv(here("trail_rec", "trail_benefit_data.csv")) |>
   clean_names() |>
   select(lead_author:dollar_year) |>
   drop_na(lead_author) |>
@@ -53,22 +54,24 @@ trail_benefit_data <- read_csv(here("trail_rec", "trail_benefit_meta.csv")) |>
 
 ## Pivot Data to be Tidy
 
+*Finds high and low estimates for benefit (consumer surplus) per visitor.*
+
 ```{r}
 trail_benefit_tidy <- trail_benefit_data |>
-  select(lead_author:miles_studied, dollar_year, ben_per_mile_low, ben_per_mile_high) |>
-  pivot_longer(cols = "ben_per_mile_low":"ben_per_mile_high",
+  select(lead_author:miles_studied, dollar_year, ben_per_person_trip_low, ben_per_person_trip_high) |>
+  pivot_longer(cols = "ben_per_person_trip_low":"ben_per_person_trip_high",
                names_to = "low_high",
-               values_to = "ben_per_mile")
+               values_to = "ben_per_visitor")
 ```
 
-## Convert nominal dollar values to real 2024 USD
+## Convert nominal dollar values to 2024 USD.
 
 ```{r}
 trail_benefit_tidy <- trail_benefit_tidy |>
   rowwise() |>
   mutate(
-    ben_per_mile_2024 = adjust_inflation(
-      amount    = ben_per_mile,
+    ben_per_visitor_2024 = adjust_inflation(
+      amount    = ben_per_visitor,
       from_year = dollar_year,
       currency  = "USD",
       to_year   = 2024
@@ -77,38 +80,61 @@ trail_benefit_tidy <- trail_benefit_tidy |>
   ungroup()
 ```
 
+## Summary Statistics: Benefit per Visitor (assume 1 Visitor = 1 Trip)
+```{r}
+mean_ben <- mean(trail_benefit_tidy$ben_per_visitor_2024)
+median_ben <- median(trail_benefit_tidy$ben_per_visitor_2024)
+range(trail_benefit_tidy$ben_per_visitor_2024)
+sd <- sd(trail_benefit_tidy$ben_per_visitor_2024)
+
+#mean is approx equal to the SD... 
+
+ggplot(data = trail_benefit_tidy, aes(x = ben_per_visitor_2024)) +
+   geom_bar() +
+  scale_x_binned()+
+  geom_vline(xintercept = mean_ben, color = "red") +
+  geom_vline(xintercept = median_ben, color = "green") +
+  geom_vline(xintercept = mean_ben + sd, color = "purple") +
+  geom_vline(xintercept = mean_ben - sd, color = "purple") +
+  labs(
+    x = "Benefit per Visitor Trip (2024 USD)",
+    y = "Count"
+  )
+```
+
+
+
 ## Explore Data
 
 ```{r}
-ben_plot_vis <- ggplot(data = trail_benefit_tidy, aes (x = visitors_per_year, 
-                                                       y = ben_per_mile_2024)) +
+ben_plot_vis <- ggplot(data = trail_benefit_tidy, aes (x = visitors_per_year,
+                                                       y = ben_per_visitor_2024)) +
   theme_minimal() +
-  geom_smooth(method = "loess", color = "darkgreen", se = F) +
-  geom_smooth(method = "lm", color = "dodgerblue", se = T) +
+  geom_smooth(method = "loess", color = "lightgreen", se = F) +
+  geom_smooth(method = "lm", color = "dodgerblue", se = F) +
   geom_point(aes(size = miles_studied), alpha = 0.3) +
-  #geom_text(aes(label = lead_author), vjust = -1.2, size = 3) + 
+  #geom_text(aes(label = lead_author), vjust = -1.2, size = 3) +
   labs(
     title = "Trail Benefits (2024$) across Literature",
     x = "Visitors per site per Year",
-    y = "Benefit Per Mile (2024$)",
+    y = "Benefit Per Visitor (2024$)",
     size = "Miles Studied"
   )
 ben_plot_vis
-
 ```
 
 ```{r}
-ben_plot_mile <- ggplot(data = trail_benefit_tidy, aes (x = miles_studied, 
-                                                       y = ben_per_mile_2024)) +
+ben_plot_mile <- ggplot(data = trail_benefit_tidy, aes (x = miles_studied,
+                                                       y = ben_per_visitor_2024)) +
   theme_minimal() +
   geom_smooth(method = "loess", color = "darkgreen", se = F) +
-  geom_smooth(method = "lm", color = "dodgerblue", se = T) +
+  geom_smooth(method = "lm", color = "blue", se = F) +
   geom_point(aes(size = visitors_per_year), alpha = 0.3) +
-  #geom_text(aes(label = lead_author), vjust = -0.5, size = 3) + 
+  geom_text(aes(label = lead_author), vjust = -0.5, size = 3) +
   labs(
     title = "Trail Benefits (2024$) across Literature",
     x = "Total Miles Studied",
-    y = "Benefit Per Mile (2024$)",
+    y = "Benefit Per Visitor (2024$)",
     size = "Visitors per Year"
   )
 ben_plot_mile
@@ -117,27 +143,31 @@ ben_plot_mile
 ## Regression: Per-Mile Trail Benefit
 
 ```{r}
-trail_ben_reg <- lm(ben_per_mile_2024 ~ miles_studied + visitors_per_year,
-                 data = trail_benefit_tidy)
+trail_ben_reg <- lm(ben_per_visitor_2024 ~ miles_studied + visitors_per_year,
+                 data = trail_benefit_tidy
+                 )
 b <- coef(trail_ben_reg)
 
-summ(trail_ben_reg, digits = 4)
+summary(trail_ben_reg, digits = 4)
 ```
 
 ## Create a Predictive Function
 
 ```{r}
 
-# interaction = miles * visitors 
+# `ben_estimate` is the benefit per visitor for each trip
 
 ben_estimate <- function(miles_studied, visitors_per_year) {
   b["(Intercept)"] + b["miles_studied"] * miles_studied + b["visitors_per_year"] * visitors_per_year
 }
 
+# SMRP-Specific Parameters
+smrp_vis = 100000
+smrp_mi = 2.21
+
 # Calculate the estimated Benefit ($) in 
-ben_estimate(miles_studied = 2.2, visitors_per_year = 100000) 
+final_estimate_smrp <- (ben_estimate(miles_studied = smrp_mi, visitors_per_year = smrp_vis)) * smrp_vis
 
-# PLUG IN REAL VALUES!!!!!
+cat("The estimated benefit of the additional", smrp_mi, "miles of trail by the Santa Margarita River Bridge Project are $", final_estimate_smrp, "per year.")
+
 ```
-
-Result: The estimated benefit of the additional **2.2** miles of trail by the Santa Margarita River Bridge Project are **$1,115,532** per year.
