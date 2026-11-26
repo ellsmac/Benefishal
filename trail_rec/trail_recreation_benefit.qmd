@@ -9,10 +9,9 @@ theme: zephyr
 # Notes
 
 ::: {.callout-important title="To Do"}
-1. Ellie: verify visitor data with Zach
-2. add more papers?
+1.  Ellie: verify visitor data with Zach
+2.  add more papers?
 :::
-
 
 ## Load Packages
 
@@ -47,7 +46,8 @@ trail_benefit_data <- read_csv(here("trail_rec", "trail_benefit_data.csv")) |>
     annual_agg_ben_high = total_benefit_annual_unless_noted_high,
     ben_per_mile_low = benefit_per_trail_mile_per_year_usd_low,
     ben_per_mile_high = benefit_per_trail_mile_per_year_usd_high) |>
-  mutate(across(visitors_per_year:dollar_year, as.numeric))
+  mutate(across(visitors_per_year:dollar_year, as.numeric)) |>
+  mutate(ben_per_person_trip_av=(ben_per_person_trip_low+ben_per_person_trip_high)/2)
     
 ```
 
@@ -57,10 +57,18 @@ trail_benefit_data <- read_csv(here("trail_rec", "trail_benefit_data.csv")) |>
 
 ```{r}
 trail_benefit_tidy <- trail_benefit_data |>
-  select(lead_author:miles_studied, dollar_year, ben_per_person_trip_low, ben_per_person_trip_high) |>
-  pivot_longer(cols = "ben_per_person_trip_low":"ben_per_person_trip_high",
-               names_to = "low_high",
-               values_to = "ben_per_visitor")
+  select(lead_author:miles_studied, dollar_year,
+         ben_per_person_trip_low,
+         ben_per_person_trip_high,
+         ben_per_person_trip_av) |>
+  mutate(weight = 1/(ben_per_person_trip_high - ben_per_person_trip_low),
+         weight = if_else(is.infinite(weight), 0.08, weight))|>
+  pivot_longer(
+    cols = starts_with("ben_per_person_trip"),
+    names_to = "low_high",
+    names_pattern = "ben_per_person_trip_(.*)",
+    values_to = "ben_per_visitor"
+  )
 ```
 
 ## Convert nominal dollar values to 2024 USD.
@@ -69,17 +77,18 @@ trail_benefit_tidy <- trail_benefit_data |>
 trail_benefit_tidy <- trail_benefit_tidy |>
   rowwise() |>
   mutate(
-    ben_per_visitor_2024 = adjust_inflation(
-      amount    = ben_per_visitor,
-      from_year = dollar_year,
-      currency  = "USD",
-      to_year   = 2024
-    )
+   ben_per_visitor_2024 = adjust_inflation(
+    amount    = ben_per_visitor,
+     from_year = dollar_year,
+   currency  = "USD",
+     to_year   = 2024
+   )
   ) |>
   ungroup()
 ```
 
 ## Summary Statistics: Benefit per Visitor (assume 1 Visitor = 1 Trip)
+
 ```{r}
 mean_ben <- mean(trail_benefit_tidy$ben_per_visitor_2024)
 median_ben <- median(trail_benefit_tidy$ben_per_visitor_2024)
@@ -101,13 +110,10 @@ ggplot(data = trail_benefit_tidy, aes(x = ben_per_visitor_2024)) +
   )
 ```
 
-
-
 ## Explore Data
 
 ```{r}
-ben_plot_vis <- ggplot(data = trail_benefit_tidy, aes (x = visitors_per_year,
-                                                       y = ben_per_visitor_2024)) +
+ben_plot_vis <- ggplot(data = trail_benefit_tidy%>% filter(low_high=='av'), aes (x = visitors_per_year, y = ben_per_visitor_2024)) +
   theme_minimal() +
   geom_smooth(method = "loess", color = "lightgreen", se = F) +
   geom_smooth(method = "lm", color = "dodgerblue", se = F) +
@@ -123,8 +129,7 @@ ben_plot_vis
 ```
 
 ```{r}
-ben_plot_mile <- ggplot(data = trail_benefit_tidy, aes (x = miles_studied,
-                                                       y = ben_per_visitor_2024)) +
+ben_plot_mile <- ggplot(data = trail_benefit_tidy %>% filter(low_high=='av'), aes (x = miles_studied,y = ben_per_visitor_2024)) +
   theme_minimal() +
   geom_smooth(method = "loess", color = "darkgreen", se = F) +
   geom_smooth(method = "lm", color = "blue", se = F) +
@@ -142,9 +147,17 @@ ben_plot_mile
 ## Regression: Per-Mile Trail Benefit
 
 ```{r}
-trail_ben_reg <- lm(ben_per_visitor_2024 ~ miles_studied + visitors_per_year,
-                 data = trail_benefit_tidy
-                 )
+df_model <- trail_benefit_tidy %>% 
+            filter(low_high=="low") %>% 
+            filter(ben_per_visitor_2024<100)
+
+#Regression with visitors per year
+#trail_ben_reg <- lm(ben_per_visitor_2024 ~ miles_studied +visitors_per_year,
+#                 data = df_model, weights=weight)
+#Regression without visitors
+trail_ben_reg <- lm(ben_per_visitor_2024 ~ miles_studied,
+                    data = df_model, weights=weight)
+
 b <- coef(trail_ben_reg)
 
 summary(trail_ben_reg, digits = 4)
@@ -156,9 +169,13 @@ summary(trail_ben_reg, digits = 4)
 
 # `ben_estimate` is the benefit per visitor for each trip
 
+#ben_estimate <- function(miles_studied, visitors_per_year) {
+#  b["(Intercept)"] + b["miles_studied"] * miles_studied + b["visitors_per_year"] * visitors_per_year
+#}
+
+
 ben_estimate <- function(miles_studied, visitors_per_year) {
-  b["(Intercept)"] + b["miles_studied"] * miles_studied + b["visitors_per_year"] * visitors_per_year
-}
+  b["(Intercept)"] + b["miles_studied"] * miles_studied}
 
 # SMRP-Specific Parameters
 smrp_vis = 100000
